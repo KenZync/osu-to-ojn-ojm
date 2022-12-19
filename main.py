@@ -61,5 +61,3 @@ for filename in os.listdir(os.getcwd()):
         os.remove("lib/"+ target_file)
         wav_file = music_file.replace(".mp3",".wav")
         os.remove("lib/"+ wav_file)
-        os.remove("lib/HX.osu")
-        os.remove("lib/HX.bms")
