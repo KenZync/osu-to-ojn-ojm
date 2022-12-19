@@ -53,3 +53,5 @@ for filename in os.listdir(os.getcwd()):
         shutil.move("HX.osu", "lib/HX.osu")
         subprocess.run('osu2bms HX.osu HX.bms --key-map-o2mania',shell=True, cwd="lib")
         subprocess.run('enojn2 1000 HX.bms',shell=True, cwd="lib")
+        shutil.move("lib/o2ma1000.ojn", "o2ma1000.ojn")
+        shutil.move("lib/o2ma1000.ojm", "o2ma1000.ojm")
