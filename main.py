@@ -50,9 +50,6 @@ for filename in os.listdir(os.getcwd()):
             shutil.move("HX.osu", "lib/HX.osu")
         if(audio_is_mp3):
             target_file = music_file.replace(".mp3",".ogg")
-            AudioSegment.converter = "lib/ffmpeg.exe"
-            AudioSegment.ffmpeg = "lib/ffmpeg.exe"
-            AudioSegment.ffprobe ="lib/ffprobe.exe"
             AudioSegment.from_mp3(music_file).export(target_file, format='ogg')
             shutil.move(target_file, "lib/" + target_file)
         else:
