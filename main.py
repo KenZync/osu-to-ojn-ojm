@@ -47,10 +47,16 @@ for filename in os.listdir(os.getcwd()):
             lines.insert(timing_points_newline_index, text_joined)
             with open('HX.osu', 'w', encoding='UTF-8') as f:
                 f.writelines(lines)
+            shutil.move("HX.osu", "lib/HX.osu")
         if(audio_is_mp3):
             target_file = music_file.replace(".mp3",".ogg")
+            AudioSegment.converter = "lib/ffmpeg.exe"
+            AudioSegment.ffmpeg = "lib/ffmpeg.exe"
+            AudioSegment.ffprobe ="lib/ffprobe.exe"
             AudioSegment.from_mp3(music_file).export(target_file, format='ogg')
-        shutil.move("HX.osu", "lib/HX.osu")
+            shutil.move(target_file, "lib/" + target_file)
+        else:
+            shutil.move(music_file, "lib/" + music_file)
         subprocess.run('osu2bms HX.osu HX.bms --key-map-o2mania',shell=True, cwd="lib")
         subprocess.run('enojn2 1000 HX.bms',shell=True, cwd="lib")
         shutil.move("lib/o2ma1000.ojn", "o2ma1000.ojn")
