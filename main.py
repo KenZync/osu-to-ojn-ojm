@@ -50,7 +50,7 @@ for filename in os.listdir(os.getcwd()):
             shutil.move("HX.osu", "lib/HX.osu")
         if(audio_is_mp3):
             target_file = music_file.replace(".mp3",".ogg")
-            AudioSegment.from_mp3(music_file).export(target_file, format='ogg')
+            AudioSegment.from_mp3(music_file).export(target_file, format='ogg', bitrate="192k")
             shutil.move(target_file, "lib/" + target_file)
         else:
             shutil.move(music_file, "lib/" + music_file)
@@ -58,3 +58,8 @@ for filename in os.listdir(os.getcwd()):
         subprocess.run('enojn2 1000 HX.bms',shell=True, cwd="lib")
         shutil.move("lib/o2ma1000.ojn", "o2ma1000.ojn")
         shutil.move("lib/o2ma1000.ojm", "o2ma1000.ojm")
+        os.remove("lib/"+ target_file)
+        wav_file = music_file.replace(".mp3",".wav")
+        os.remove("lib/"+ wav_file)
+        os.remove("lib/HX.osu")
+        os.remove("lib/HX.bms")
