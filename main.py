@@ -164,10 +164,10 @@ for filename in os.listdir(os.getcwd()):
                 try:
                     start = float(time[0])
                     end = float(bpm_list[i+1].split(',')[0])
-                    duration = end - start
                 except: 
                     end = last_offset
-                bpm_now =  float(time[1])
+                duration = end - start
+                bpm_now =  round(float(time[1]),10)
                 if bpm_now in bpm_duration:
                     bpm_duration[bpm_now] += duration
                 else:
@@ -177,21 +177,23 @@ for filename in os.listdir(os.getcwd()):
 
             print("First Offset")
             print(first_offset)
-            print("Osu BPM")
-            print(bpm)
-            print("Real BPM")
-            print(60000/float(bpm))
-            append_offset_util = round(float(bpm)*4)
+            # print("Osu BPM")
+            # print(bpm)
+            # print("Real BPM")
+            # print(60000/float(bpm))
+            append_offset_util = round(float(longest_duration_bpm)*4)
             print("Append Offset Utility")
             print(append_offset_util)
-
+            
             if (first_offset < append_offset_util):
                 print("True")
                 append_offset = append_offset_util - first_offset
             else:
                 room = first_offset//append_offset_util
-                offset_need = append_offset_util*room
+                offset_need = append_offset_util*(room+1)
                 append_offset = offset_need - first_offset
+            while(append_offset < 2000):
+                append_offset = append_offset + append_offset_util
             print("APPEND OFFSET")
             print(append_offset)
 
@@ -228,7 +230,7 @@ for filename in os.listdir(os.getcwd()):
                 point = timing.split(',')
                 point[0] = remove_trailing_zeros(point[0]) + append_offset
                 timing_lines[i] = ','.join(map(str, point))
-                lines.insert(timing_points_index+i+1, timing_lines[i]+'\n')
+                lines.insert(timing_points_index+i+2, timing_lines[i]+'\n')
 
             print("Writing a new Osu File")
             with open('HX.osu', 'w', encoding='UTF-8') as f:
