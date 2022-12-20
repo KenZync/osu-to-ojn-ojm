@@ -28,6 +28,7 @@ for filename in os.listdir(os.getcwd()):
     if is_image(file_path):
         print("Found Image: ",filename)
         image = Image.open(file_path)
+        image = image.convert("RGB")
         image = image.resize((800, 600))
         cover_file_path = f'{file_lib_path}_800x600.jpg'
         image.save(cover_file_path, format='JPEG')
@@ -54,38 +55,38 @@ for filename in os.listdir(os.getcwd()):
             audio_is_mp3 = False
             for i,line in enumerate(lines):
                 if line.startswith('Title:'):
-                    words = line.split(":")
-                    title_non_unicode = words[1].strip().encode("cp949")
+                    words = line[6:].strip()
+                    title_non_unicode = words.encode("cp949")
                 if line.startswith('TitleUnicode:'):
-                    words = line.split(":")
+                    words = line[13:].strip()
                     try:
-                        title_unicode = words[1].strip().encode("cp949")
+                        title_unicode = words.encode("cp949")
                     except:
                         title_unicode = title_non_unicode
                         print("TitleUnicode Error, used Title")
                     print("Title : ", title_unicode)
                 if line.startswith('Artist:'):
-                    words = line.split(":")
-                    artist_non_unicode = words[1].strip().encode("cp949")
+                    words = line[7:].strip()
+                    artist_non_unicode = words.encode("cp949")
                     print("Artist : ", artist_non_unicode)
                 if line.startswith('ArtistUnicode:'):
-                    words = line.split(":")
+                    words = line[13:].strip()
                     try:
-                        artist_unicode = words[1].strip().encode("cp949")
+                        artist_unicode = words.encode("cp949")
                     except:
                         artist_unicode = artist_non_unicode
                         print("ArtistUnicode Error, used Artist")
                     print("Artist : ", artist_unicode)
                 if line.startswith('Creator:'):
-                    words = line.split(":")
+                    words = line[7:].strip()
                     try:
-                        creator = words[1].strip().encode("cp949")
+                        creator = words.encode("cp949")
                     except:
-                        creator = words[1].strip().encode()
+                        creator = words.encode()
                     print("Creator : ", creator)
                 if line.startswith('AudioFilename:'):
-                    words = line.split()
-                    filename = words[1]
+                    filename = line[14:].strip()
+                    print("Audio File : ",filename)
                     if filename.endswith('.mp3'):
                         music_file = filename
                         filename = filename[:-4] + '.ogg'
@@ -104,7 +105,7 @@ for filename in os.listdir(os.getcwd()):
                     largest = max(largest, third_column, last_column)
 
             text_split = timing_points_text_before_newline.split(',')
-            text_split[0] = str(max(int(text_split[0]),largest) + 2000)
+            text_split[0] = str(max(float(text_split[0]),largest) + 2000)
             text_split[-1] = text_split[-1] + '\n'
             text_joined = ','.join(text_split)
 
