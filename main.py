@@ -26,6 +26,7 @@ for filename in os.listdir(os.getcwd()):
     lib_path = os.path.join(folder_path, 'lib')
     file_lib_path = os.path.join(lib_path, filename)
     if is_image(file_path):
+        print("Found Image: ",filename)
         image = Image.open(file_path)
         image = image.resize((800, 600))
         cover_file_path = f'{file_lib_path}_800x600.jpg'
@@ -38,6 +39,7 @@ for filename in os.listdir(os.getcwd()):
     if filename=="HX.osu":
         continue
     if filename.endswith('.osu'):
+        print("Found Map: ",filename)
         music_file = ''
         with open(os.path.join(os.getcwd(), filename), 'r',encoding = 'utf-8') as f:
             lines = f.readlines()
@@ -51,15 +53,36 @@ for filename in os.listdir(os.getcwd()):
             largest = 0
             audio_is_mp3 = False
             for i,line in enumerate(lines):
+                if line.startswith('Title:'):
+                    words = line.split(":")
+                    title_non_unicode = words[1].strip().encode("cp949")
                 if line.startswith('TitleUnicode:'):
                     words = line.split(":")
-                    title_unicode = words[1].strip().encode("cp949")
+                    try:
+                        title_unicode = words[1].strip().encode("cp949")
+                    except:
+                        title_unicode = title_non_unicode
+                        print("TitleUnicode Error, used Title")
+                    print("Title : ", title_unicode)
+                if line.startswith('Artist:'):
+                    words = line.split(":")
+                    artist_non_unicode = words[1].strip().encode("cp949")
+                    print("Artist : ", artist_non_unicode)
                 if line.startswith('ArtistUnicode:'):
                     words = line.split(":")
-                    artist_unicode = words[1].strip().encode("cp949")
+                    try:
+                        artist_unicode = words[1].strip().encode("cp949")
+                    except:
+                        artist_unicode = artist_non_unicode
+                        print("ArtistUnicode Error, used Artist")
+                    print("Artist : ", artist_unicode)
                 if line.startswith('Creator:'):
                     words = line.split(":")
-                    creator = words[1].strip().encode("cp949")
+                    try:
+                        creator = words[1].strip().encode("cp949")
+                    except:
+                        creator = words[1].strip().encode()
+                    print("Creator : ", creator)
                 if line.startswith('AudioFilename:'):
                     words = line.split()
                     filename = words[1]
@@ -86,16 +109,20 @@ for filename in os.listdir(os.getcwd()):
             text_joined = ','.join(text_split)
 
             lines.insert(timing_points_newline_index, text_joined)
+            print("Writing a new Osu File")
             with open('HX.osu', 'w', encoding='UTF-8') as f:
                 f.writelines(lines)
             shutil.move("HX.osu", "lib/HX.osu")
         if(audio_is_mp3):
+            print("Converting MP3 to OGG")
             target_file = music_file.replace(".mp3",".ogg")
             AudioSegment.from_mp3(music_file).export(target_file, format='ogg', bitrate="192k")
             shutil.move(target_file, "lib/" + target_file)
         else:
             shutil.move(music_file, "lib/" + music_file)
+        print("Converting to BMS")
         subprocess.run('osu2bms HX.osu HX.bms --key-map-o2mania',shell=True, cwd="lib")
+        print("Converting to OJN")
         subprocess.run('enojn2 '+input_id+' HX.bms',shell=True, cwd="lib")
         shutil.move("lib/o2ma"+input_id+".ojn", "o2ma"+input_id+".ojn")
         shutil.move("lib/o2ma"+input_id+".ojm", "o2ma"+input_id+".ojm")
@@ -103,6 +130,7 @@ for filename in os.listdir(os.getcwd()):
         wav_file = music_file.replace(".mp3",".wav")
         os.remove("lib/"+ wav_file)
 
+print("Apply Metadata, Cover and BMP")
 with open('o2ma'+input_id+'.ojn', 'r+b') as f:
     data = f.read()
     songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, timet_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
