@@ -14,7 +14,12 @@ input_id = str(input("Enter the ID : ") or "1000")
 input_level_raw = int(input("Enter the Level : ") or "0")
 input_level = int(input_level_raw)
 
+# input_id = "1000"
+# input_level = 1
+
 # Check is a file an image
+
+
 def is_image(filename):
     try:
         img = Image.open(filename)
@@ -24,6 +29,8 @@ def is_image(filename):
         return False
 
 # Float, String compatibility
+
+
 def remove_trailing_zeros(number):
     float_number = float(number)
     if isclose(float_number, int(float_number), rel_tol=1e-9):
@@ -31,12 +38,14 @@ def remove_trailing_zeros(number):
     else:
         return "{:f}".format(float_number)
 
+
 folder_path = os.getcwd()
 found_image = False
 for filename in os.listdir(os.getcwd()):
     file_path = os.path.join(folder_path, filename)
     lib_path = os.path.join(folder_path, 'lib')
     file_lib_path = os.path.join(lib_path, filename)
+
     if is_image(file_path):
         print("Found Image: ", filename)
         image = Image.open(file_path)
@@ -51,13 +60,21 @@ for filename in os.listdir(os.getcwd()):
 
     if filename == "HX.osu":
         continue
+
     if filename.endswith('.osu'):
         print("Found Map: ", filename)
         music_file = ''
         with open(os.path.join(os.getcwd(), filename), 'r', encoding='utf-8') as f:
             lines = f.readlines()
+
             timing_points_index = lines.index('[TimingPoints]\n')
             hit_objects_index = lines.index('[HitObjects]\n')
+
+            try:
+                epilepsy_warning = lines.index('EpilepsyWarning: 1\n')
+                lines[epilepsy_warning] = '\n'
+            except:
+                print("EpilepsyWarning Not Found")
 
             found = False
             largest = 0
@@ -135,56 +152,61 @@ for filename in os.listdir(os.getcwd()):
                     last_offset = third_column
                 last_offset = max(last_offset, third_column, last_column)
 
-            # Fix 4/4 measure
             bpm_list = []
+            # Get BPM List
             for i, timing in enumerate(timing_lines):
                 point = timing.split(',')
                 timing_offset = float(point[0])
                 timing_bpm = float(point[1])
-                point[2]=4
-                point[3]=2
 
-                if(timing_bpm > 0):
+                if (timing_bpm > 0):
                     bpm_list.append(timing)
 
-                try:
-                    first_offset
-                except NameError:
-                    first_offset = timing_offset
-                if (timing_bpm > 0 and timing_offset <= first_offset):
-                    first_offset = remove_trailing_zeros(timing_offset)
-                    bpm = remove_trailing_zeros(timing_bpm)
-                if i == len(timing_lines) - 1:
-                    new_timing_last_line = point
-                    new_timing_last_line[0] = last_offset + 2000
-
+            # Find Main BPM
             bpm_duration = {}
-            for i,each_time in enumerate(bpm_list):
+            for i, each_time in enumerate(bpm_list):
                 time = each_time.split(',')
+
                 try:
                     start = float(time[0])
                     end = float(bpm_list[i+1].split(',')[0])
-                except: 
+                except:
                     end = last_offset
                 duration = end - start
-                bpm_now =  round(float(time[1]),10)
+                bpm_now = round(float(time[1]), 10)
                 if bpm_now in bpm_duration:
                     bpm_duration[bpm_now] += duration
                 else:
                     bpm_duration[bpm_now] = duration
+
+                try:
+                    first_offset
+                except NameError:
+                    first_offset = start
+                if (bpm_now > 0 and start <= first_offset):
+                    first_offset = remove_trailing_zeros(start)
+
             longest_duration_bpm = max(bpm_duration, key=bpm_duration.get)
-            print(f'The bpm with the longest duration is {60000/float(longest_duration_bpm)}')
+            print(
+                f'The bpm with the longest duration is {60000/float(longest_duration_bpm)}')
+
+            print(time)
+            time[0]= last_offset + 2000
+            time[1]= longest_duration_bpm
+            new_timing_last_line=time
+            print(new_timing_last_line)
+            timing_lines.append(','.join(map(str, new_timing_last_line)))
 
             print("First Offset")
             print(first_offset)
-            # print("Osu BPM")
-            # print(bpm)
-            # print("Real BPM")
-            # print(60000/float(bpm))
+
+            print("Last Offset")
+            print(last_offset)
+
             append_offset_util = round(float(longest_duration_bpm)*4)
             print("Append Offset Utility")
             print(append_offset_util)
-            
+
             if (first_offset < append_offset_util):
                 print("True")
                 append_offset = append_offset_util - first_offset
@@ -192,14 +214,18 @@ for filename in os.listdir(os.getcwd()):
                 room = first_offset//append_offset_util
                 offset_need = append_offset_util*(room+1)
                 append_offset = offset_need - first_offset
-            while(append_offset < 2000):
+            while (append_offset + first_offset < 2000):
+                print("Offset is < 2000")
                 append_offset = append_offset + append_offset_util
             print("APPEND OFFSET")
             print(append_offset)
+            print("NEW FIRST BPM OFFSET")
+            print(append_offset + first_offset)
 
-            
+            # Delete ALL Hit Objects
             del lines[hit_objects_index+1:]
-            # Move Notes Up/Down to aligned first room (BETA)
+
+            # Rewrite Notes to Move to aligned first room
             for i, object in enumerate(object_lines):
                 note = object.split(',')
                 third_column = remove_trailing_zeros(note[2])
@@ -212,27 +238,30 @@ for filename in os.listdir(os.getcwd()):
                 object_lines[i] = ','.join(map(str, note))
                 lines.insert(hit_objects_index+i+1, object_lines[i]+'\n')
 
-            timing_lines.append(','.join(map(str, new_timing_last_line)))
 
-            
+            # Delete ALL Offsets
             del lines[timing_points_index+1:hit_objects_index-2]
 
-            # Add Offset at 0 to fix Bug (BETA)
+            # Add Offset at 0 to fix Bug
             first_timing = timing_lines[0].split(',')
-            if(float(first_timing[0]) > 0):
+            if (float(first_timing[0]) > 0):
                 first_timing[0] = 0
+                first_timing[2] = 4
+                first_timing[3] = 2
                 first_timing[1] = longest_duration_bpm
                 first_timing = ','.join(map(str, first_timing))
                 lines.insert(timing_points_index+1, first_timing+'\n')
 
-            # Move BPM Lines (BETA)
+            # Rewrite BPM Lines (BETA)
             for i, timing in enumerate(timing_lines):
                 point = timing.split(',')
+                point[2] = 4
+                point[3] = 2
                 point[0] = remove_trailing_zeros(point[0]) + append_offset
                 timing_lines[i] = ','.join(map(str, point))
                 lines.insert(timing_points_index+i+2, timing_lines[i]+'\n')
 
-            print("Writing a new Osu File")
+            print("Writing a new HX.osu File")
             with open('HX.osu', 'w', encoding='UTF-8') as f:
                 f.writelines(lines)
             shutil.move("HX.osu", "lib/HX.osu")
@@ -272,6 +301,16 @@ with open('o2ma'+input_id+'.ojn', 'r+b') as f:
     level_ex = input_level
     level_nx = input_level
     level_hx = input_level
+
+    if (measure_ex > 300):
+        measure_ex = 300
+
+    if (measure_nx > 300):
+        measure_nx = 300
+
+    if (measure_hx > 300):
+        measure_hx = 300
+
     f.seek(0)
     if found_image:
         with open(cover_file_path, 'rb') as cover_file:
@@ -286,11 +325,11 @@ with open('o2ma'+input_id+'.ojn', 'r+b') as f:
         new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
                                       measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, timet_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
         f.write(new_header_data)
-
         f.seek(cover_offset)
         f.write(cover_file_data + bmp_file_data)
         os.remove(cover_file_path)
         os.remove(bmp_file_path)
+
     else:
         new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
                                       measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, timet_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
