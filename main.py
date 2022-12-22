@@ -173,10 +173,10 @@ for filename in os.listdir(os.getcwd()):
 
                 try:
                     start = float(time[0])
-                    end = float(bpm_list[i+1].split(',')[0])
                     if(i == 0):
                         first_try_offset = start
                         start = 0
+                    end = float(bpm_list[i+1].split(',')[0])
                 except:
                     end = last_offset
                 duration = end - start
