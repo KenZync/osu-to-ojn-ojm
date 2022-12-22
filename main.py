@@ -117,7 +117,6 @@ for filename in os.listdir(os.getcwd()):
                     except:
                         title_unicode = title_non_unicode
                         print("TitleUnicode Error, used Title")
-                    print("Title : ", title_unicode)
                 if line.startswith('Artist:'):
                     words = line[7:].strip()
                     artist_non_unicode = words.encode("cp949")
@@ -409,7 +408,7 @@ for filename in os.listdir(os.getcwd()):
             # bms_lines.remove(delete_this)
             bms_lines.append(bms_last_line_final)
 
-        with open('lib/O2JAM.bms', 'w') as o2jam:
+        with open('lib/O2JAM.bms', 'w', encoding='utf-8') as o2jam:
             o2jam.writelines(bms_lines)
             o2jam.close()
 
