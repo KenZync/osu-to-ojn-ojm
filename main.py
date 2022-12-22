@@ -144,7 +144,8 @@ for filename in os.listdir(os.getcwd()):
                         filename = filename[:-4] + '.ogg'
                         lines[i] = f"AudioFilename: {filename}\n"
                         audio_is_mp3 = True
-
+                if line.startswith('AudioLeadIn:'):
+                    lines[i]= "AudioLeadIn:0\n"
             # Check for last note offset
             for object in object_lines:
                 note = object.split(',')
@@ -190,13 +191,6 @@ for filename in os.listdir(os.getcwd()):
                     first_offset
                 except NameError:
                     first_offset = first_try_offset
-                # try:
-                #     first_offset
-                # except NameError:
-                #     first_offset = first_try_offset
-                # if bpm_now > 0 and first_try_offset <= first_offset:
-                #     if(i != 0):
-                #         first_offset = start
 
             longest_duration_bpm = max(bpm_duration, key=bpm_duration.get)
             longest_duration_bpm = float(longest_duration_bpm)*input_multiply_bpm
@@ -266,42 +260,33 @@ for filename in os.listdir(os.getcwd()):
             # Rewrite BPM Lines (BETA)
             for i, timing in enumerate(timing_lines):
                 point = timing.split(',')
+                timing_offset = float(point[0])
+                timing_bpm = float(point[1])
+
+                if i < len(timing_lines) - 1:
+                    next = timing_lines[i+1].split(',')   
+                    next_timing_offset = float(next[0])
+                    next_timing_bpm = float(next[1])
+                    if(timing_offset == next_timing_offset  and next_timing_bpm < 0 and timing_bpm > 0):
+                        point[1] = timing_bpm*(abs(next_timing_bpm)/100)
+                        next[1] = -100
+                        timing_lines[i+1] = ','.join(map(str, next))
+
                 point[0] = remove_trailing_zeros(
                     float(point[0]) + append_offset)
-                # timing_offset = float(point[0])
-                timing_bpm = float(point[1])
-                # print(timing_offset)
-                # if(i!=len(timing_lines)-1):
-                #     next = timing_lines[i+1].split(',')
-                #     next_timing_offset = float(next[0]) + append_offset
-                #     # print()
-                #     # print(next_timing_offset)
-                #     next_timing_bpm = float(next[1])
-                #     # print("next_timing_offset")
-                #     # print(next_timing_offset)
-                #     # print(timing_offset,next_timing_offset)
-                #     if(timing_offset == next_timing_offset  and next_timing_bpm < 0 and timing_bpm > 0):
-                # #         print(timing_bpm,next_timing_bpm)
-                #         new_bpm = timing_bpm*(1 + abs(next_timing_bpm)/100)
-                #         point[1] = new_bpm
-                #         # print(timing_bpm,new_bpm)
-                # #         print(timing_bpm, new_bpm)
-                #         del timing_lines[i+1]
 
                 if (timing_bpm > 0):
                     point[1] = str(float(point[1]) * input_multiply_bpm)
                 point[2] = 4
                 point[3] = 2
+
                 timing_lines[i] = ','.join(map(str, point))
-                lines.insert(timing_points_index+i+2, timing_lines[i]+'\n')
-            # for timing in timing_lines:
-            #     print(timing)
+                lines.insert(timing_points_index+i+2, timing_lines[i]+'\n') 
 
             print("Writing a new HX.osu File")
             with open(file_osu_inprogress, 'w', encoding='UTF-8') as f:
                 f.writelines(lines)
                 f.close()
-            # shutil.move("HX.osu", "lib/HX.osu")
 
         if (audio_is_mp3):
             print("Converting MP3 to OGG")
@@ -310,29 +295,7 @@ for filename in os.listdir(os.getcwd()):
             music_size = os.path.getsize(music_file)
             silent_segment = AudioSegment.silent(duration=append_offset)
             the_song = AudioSegment.from_mp3(music_file)
-            # duration_ms = len(the_song)
-            # print(duration)
-            # duration_seconds = duration_ms/60
-            # print(duration_seconds)
-            # song_max_offset = the_song.duration_seconds*1000
             final_song = silent_segment + the_song
-            # if (music_size > 20000000):
-            #     final_song.export(
-            #         target_file, format='ogg', bitrate="64k")
-            # else:
-            #     final_song.export(
-            #         target_file, format='ogg', bitrate="192k")
-
-            # parts = 4
-
-            # duration_ms = len(final_song)
-            # duration_seconds = duration_ms/60
-            # print(duration_ms)
-            # duration_each_parts = duration_ms/parts
-            # print(duration_each_parts)
-
-            # Make chunks of one sec
-            # chunks = make_chunks(final_song, duration_each_parts)
             chunks = final_song[::300000]
 
             # Export all of the individual chunks as wav files
@@ -354,15 +317,6 @@ for filename in os.listdir(os.getcwd()):
                         os.remove("lib/" + target_file)
                         os.rename("lib/" + chunk_name, "lib/" + target_file)
                     chunks_name[0] = target_file
-            # list_of_part = []
-            # for part in range(parts):
-            #     list_of_part.append(duration_each_parts*part)
-            # # parts = song.split_on_time([part_length_ms, 2*part_length_ms, 3*part_length_ms])
-            # parts_song = final_song.split_on_time(list_of_part)
-
-            # final_song.export(
-            #     target_file, format='ogg', bitrate="192k")
-            # shutil.move(target_file, "lib/" + target_file)
         else:
             shutil.move(music_file, "lib/" + music_file)
 
@@ -389,13 +343,9 @@ for filename in os.listdir(os.getcwd()):
         print("Adjust Last BPM to the Line")
         with open('lib/HX.bms', 'r', encoding='UTF-8') as bms:
             bms_lines = bms.readlines()
-            # print(bms_lines)
             for bms_line in reversed(bms_lines):
                 if bms_line.strip():
                     bms_last_line = list(bms_line)
-                    # print(bms_lines[i-1])
-                    # bms_lines[-i-1] = '\n'
-                    # del bms_lines[i]
                     break
             bms_last_line[3] = int(bms_last_line[3])+1
             bms_last_line[4] = 0
@@ -405,7 +355,6 @@ for filename in os.listdir(os.getcwd()):
             bms_last_line.append(64)
             bms_last_line.append("\n")
             bms_last_line_final = ''.join(map(str, bms_last_line))
-            # bms_lines.remove(delete_this)
             bms_lines.append(bms_last_line_final)
 
         with open('lib/O2JAM.bms', 'w', encoding='utf-8') as o2jam:
@@ -416,9 +365,6 @@ for filename in os.listdir(os.getcwd()):
         subprocess.run('enojn2 '+input_id+' O2JAM.bms', shell=True, cwd="lib")
         shutil.move("lib/o2ma"+input_id+".ojn", "o2ma"+input_id+".ojn")
         shutil.move("lib/o2ma"+input_id+".ojm", "o2ma"+input_id+".ojm")
-        # os.remove("lib/" + target_file)
-        # wav_file = music_file.replace(".mp3", ".wav")
-        # os.remove("lib/" + wav_file)
 
         for i, chunk in enumerate(chunks_name):
             chunk_wav_file = chunk.replace(".ogg", ".wav")
