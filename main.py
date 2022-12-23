@@ -378,14 +378,10 @@ def convert_to_o2jam(input):
 
         f.seek(0)
         if found_image:
-            with open(cover_file_path, 'rb') as cover_file:
-                cover_file_data = cover_file.read()
-                cover_file_size = len(cover_file_data)
-            with open(bmp_file_path, 'rb') as bmp_file:
-                bmp_file_data = bmp_file.read()
-                bmp_file_size = len(bmp_file_data)
-            cover_size = cover_file_size
-            bmp_size = bmp_file_size
+            cover_file_data = open(cover_file_path, 'rb').read()
+            cover_size = len(cover_file_data)
+            bmp_file_data = open(bmp_file_path, 'rb').read()
+            bmp_size = len(bmp_file_data)
 
             new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
                                           measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
