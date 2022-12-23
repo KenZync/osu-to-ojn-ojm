@@ -8,6 +8,7 @@ import struct
 import glob
 from utils import *
 import concurrent.futures
+from multiprocessing import freeze_support
 
 ojn_struct = '< i 4s f i f 4h 3i 3i 3i 3i h h 20s i i 64s 32s 32s 32s i 3i 3i i'
 
@@ -424,8 +425,10 @@ def main():
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for index, osu_file in enumerate(osu_files):
             executor.submit(convert_to_o2jam, (index, input_id,
-                            osu_file, input_level, input_multiply_bpm, use_title))
+                            osu_file, input_level, input_multiply_bpm,
+                             use_title))
     print("ALL DONE!")
 
 if __name__ == '__main__':
+    freeze_support()
     main()
