@@ -2,66 +2,51 @@ import os
 import re
 import subprocess
 from pydub import AudioSegment
-from pydub.utils import make_chunks
 import shutil
 from PIL import Image
 import struct
 from decimal import Decimal
-from math import isclose
-from time import sleep
-import msvcrt
+
+import glob
+
+from utils import *
+
+
 
 ojn_struct = '< i 4s f i f 4h 3i 3i 3i 3i h h 20s i i 64s 32s 32s 32s i 3i 3i i'
 
 input_id = "1000"
 input_level = 1
+use_title = True
 
 file_osu_inprogress = "HX_NOT_DONE.osu"
 file_osu_done = "HX.osu"
 
-input_id = str(input("Enter the ID Default (1000) : ") or "1000")
+osuCounter = len(glob.glob1('',"*.osu"))
+print(osuCounter)
+if(osuCounter > 1):
+    print("Multiple .osu file detected")
+    use_title = yes_or_no("Would you like to use Title (Y) / Difficulty (N) as a Title name in o2jam?")
+
+input_id_raw = str(input("Enter the ID Default (1000) : ") or "1000")
 input_level_raw = int(input("Enter the Level Default (1): ") or "1")
 input_level = int(input_level_raw)
 input_multiply_bpm = float(input("Multiply BPM (Ex. 0.5 ,0.75) Default (1) : ") or "1")
 input_multiply_bpm = 1/input_multiply_bpm
-# Check is a file an image
-def is_image(filename):
-    try:
-        img = Image.open(filename)
-        img.verify()
-        return True
-    except (IOError, SyntaxError) as e:
-        return False
-
-# Float, String compatibility
 
 
-def remove_trailing_zeros(number):
-    float_number = float(number)
-    if isclose(float_number, int(float_number), rel_tol=1e-9):
-        return int(float_number)
-    else:
-        return "{:f}".format(float_number)
 
 
 folder_path = os.getcwd()
 found_image = False
+
+osu_counting = 0
 for filename in os.listdir(os.getcwd()):
     file_path = os.path.join(folder_path, filename)
     lib_path = os.path.join(folder_path, 'lib')
     file_lib_path = os.path.join(lib_path, filename)
 
-    if is_image(file_path):
-        print("Found Image: ", filename)
-        image = Image.open(file_path)
-        image = image.convert("RGB")
-        image = image.resize((800, 600))
-        cover_file_path = f'{file_lib_path}_800x600.jpg'
-        image.save(cover_file_path, format='JPEG')
-        image = image.resize((80, 80))
-        bmp_file_path = f'{file_lib_path}_80x80.bmp'
-        image.save(bmp_file_path, format='BMP')
-        found_image = True
+ 
 
     if filename == "HX.osu" or filename == file_osu_inprogress:
         continue
@@ -105,6 +90,7 @@ for filename in os.listdir(os.getcwd()):
                     timing_lines.append(line)
                 elif osu_section == 'hitobjects':
                     object_lines.append(line)
+                elif osu_section == 'events':
                     events_lines.append(line)
 
                 if line.startswith('Title:'):
@@ -146,7 +132,19 @@ for filename in os.listdir(os.getcwd()):
                         audio_is_mp3 = True
                 if line.startswith('AudioLeadIn:'):
                     lines[i]= "AudioLeadIn:0\n"
+                if line.startswith('Version:'):
+                    words = line[8:].strip()
+                    try:
+                        difficulty_name = words.encode("cp949")
+                    except:
+                        difficulty_name = title_unicode
             # Check for last note offset
+
+            try:
+                del last_offset
+            except:
+                print("no last offset")
+
             for object in object_lines:
                 note = object.split(',')
                 third_column = remove_trailing_zeros(note[2])
@@ -169,14 +167,15 @@ for filename in os.listdir(os.getcwd()):
 
             # Find Main BPM
             bpm_duration = {}
+            start = float(bpm_list[0].split(',')[0])
+            first_offset = start
             for i, each_time in enumerate(bpm_list):
                 time = each_time.split(',')
 
+                start = float(time[0])
+                if(i == 0):
+                    start = 0
                 try:
-                    start = float(time[0])
-                    if(i == 0):
-                        first_try_offset = start
-                        start = 0
                     end = float(bpm_list[i+1].split(',')[0])
                 except:
                     end = last_offset
@@ -186,11 +185,6 @@ for filename in os.listdir(os.getcwd()):
                     bpm_duration[bpm_now] += duration
                 else:
                     bpm_duration[bpm_now] = duration
-
-                try:
-                    first_offset
-                except NameError:
-                    first_offset = first_try_offset
 
             longest_duration_bpm = max(bpm_duration, key=bpm_duration.get)
             longest_duration_bpm = float(longest_duration_bpm)*input_multiply_bpm
@@ -288,6 +282,21 @@ for filename in os.listdir(os.getcwd()):
                 f.writelines(lines)
                 f.close()
 
+
+        image_file_name = events_lines[1].split(',')[2].strip('\"')
+        print(image_file_name)
+        if is_image(image_file_name):
+            print("Found Image: ", image_file_name)
+            image = Image.open(image_file_name)
+            image = image.convert("RGB")
+            image = image.resize((800, 600))
+            cover_file_path = f'{file_lib_path}_800x600.jpg'
+            image.save(cover_file_path, format='JPEG')
+            image = image.resize((80, 80))
+            bmp_file_path = f'{file_lib_path}_80x80.bmp'
+            image.save(bmp_file_path, format='BMP')
+            found_image = True
+
         if (audio_is_mp3):
             print("Converting MP3 to OGG")
             target_file = music_file.replace(".mp3", ".ogg")
@@ -302,7 +311,7 @@ for filename in os.listdir(os.getcwd()):
             chunks_name = []
             chunk_length = []
             for i, chunk in enumerate(chunks):
-                chunk_name = "song_part_{0}.ogg".format(i)
+                chunk_name = str(osu_counting)+"song_part_{0}.ogg".format(i)
                 chunks_name.append(chunk_name)
                 print("Exporting", chunk_name)
                 print("Length in ms")
@@ -362,6 +371,7 @@ for filename in os.listdir(os.getcwd()):
             o2jam.close()
 
         print("Converting to OJN")
+        input_id = str(int(input_id_raw) + osu_counting)
         subprocess.run('enojn2 '+input_id+' O2JAM.bms', shell=True, cwd="lib")
         shutil.move("lib/o2ma"+input_id+".ojn", "o2ma"+input_id+".ojn")
         shutil.move("lib/o2ma"+input_id+".ojm", "o2ma"+input_id+".ojm")
@@ -372,57 +382,60 @@ for filename in os.listdir(os.getcwd()):
             os.remove("lib/" + chunk_wav_file)
 
 
-print("Apply Metadata, Cover and BMP")
-with open('o2ma'+input_id+'.ojn', 'r+b') as f:
-    data = f.read()
-    songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
-        ojn_struct, data[:300])
+        print("Apply Metadata, Cover and BMP")
+        with open('o2ma'+input_id+'.ojn', 'r+b') as f:
+            data = f.read()
+            songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
+                ojn_struct, data[:300])
+            if(use_title):
+                title = title_unicode
+            else:
+                title = difficulty_name
+            artist = artist_unicode
+            noter = creator
+            level_ex = input_level
+            level_nx = input_level
+            level_hx = input_level
 
-    title = title_unicode
-    artist = artist_unicode
-    noter = creator
-    level_ex = input_level
-    level_nx = input_level
-    level_hx = input_level
+            new_cover_offset = note_nx
+            cover_offset = int(new_cover_offset)
+            f.seek(note_nx)
 
-    new_cover_offset = note_nx
-    cover_offset = int(new_cover_offset)
-    f.seek(note_nx)
+            note_nx = 300
+            note_hx = 300
+            f.truncate()
 
-    note_nx = 300
-    note_hx = 300
-    f.truncate()
+            if (measure_ex > 300):
+                measure_ex = 300
 
-    if (measure_ex > 300):
-        measure_ex = 300
+            if (measure_nx > 300):
+                measure_nx = 300
 
-    if (measure_nx > 300):
-        measure_nx = 300
+            if (measure_hx > 300):
+                measure_hx = 300
 
-    if (measure_hx > 300):
-        measure_hx = 300
+            f.seek(0)
+            if found_image:
+                with open(cover_file_path, 'rb') as cover_file:
+                    cover_file_data = cover_file.read()
+                    cover_file_size = len(cover_file_data)
+                with open(bmp_file_path, 'rb') as bmp_file:
+                    bmp_file_data = bmp_file.read()
+                    bmp_file_size = len(bmp_file_data)
+                cover_size = cover_file_size
+                bmp_size = bmp_file_size
 
-    f.seek(0)
-    if found_image:
-        with open(cover_file_path, 'rb') as cover_file:
-            cover_file_data = cover_file.read()
-            cover_file_size = len(cover_file_data)
-        with open(bmp_file_path, 'rb') as bmp_file:
-            bmp_file_data = bmp_file.read()
-            bmp_file_size = len(bmp_file_data)
-        cover_size = cover_file_size
-        bmp_size = bmp_file_size
+                new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
+                                            measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
+                f.write(new_header_data)
+                f.seek(new_cover_offset)
+                f.write(cover_file_data + bmp_file_data)
+                os.remove(cover_file_path)
+                os.remove(bmp_file_path)
 
-        new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
-                                      measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
-        f.write(new_header_data)
-        f.seek(new_cover_offset)
-        f.write(cover_file_data + bmp_file_data)
-        os.remove(cover_file_path)
-        os.remove(bmp_file_path)
-
-    else:
-        new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
-                                      measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
-        f.write(new_header_data)
-print("Done Converting Osu to O2Jam")
+            else:
+                new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
+                                            measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
+                f.write(new_header_data)
+        print("Done Converting Osu to O2Jam")
+        osu_counting+=1
