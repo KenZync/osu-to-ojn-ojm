@@ -417,7 +417,8 @@ def main():
     if(osu_count > 1):
         print("Multiple .osu file detected")
         use_title = yes_or_no("Would you like to use Title (Y) / Difficulty (N) as a Song name in o2jam?")
-
+    else:
+        use_title = True
     input_id = str(input("Enter the ID Default (1000) : ") or "1000")
     input_level_raw = int(input("Enter the Level Default (1): ") or "1")
     input_level = int(input_level_raw)
