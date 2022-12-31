@@ -1,361 +1,250 @@
 import os
-import re
-import subprocess
-from pydub import AudioSegment
-import shutil
-from PIL import Image
 import struct
+import sys
+import logging
 import glob
-from utils import *
-import concurrent.futures
+import re
+import math
+import shutil
+import imghdr
+import subprocess
 from multiprocessing import freeze_support
+from osu_writer import write_osu
+from utils import yes_or_no
+import concurrent.futures
 
-ojn_struct = '< i 4s f i f 4h 3i 3i 3i 3i h h 20s i i 64s 32s 32s 32s i 3i 3i i'
 
+def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, input_offset):
+    input_id = str(input_id + index)
 
-def convert_to_o2jam(input):
-    index, input_id, osu_file, input_level, input_multiply_bpm, use_title = input
+    with open(osu, encoding="utf-8") as file:
+        lines = file.readlines()
 
-    input_id = str(int(input_id)+index)
+    general_lines = {}
+    editor_lines = {}
+    metadata_lines = {}
+    difficulty_lines = {}
+    timing_lines = []
+    object_lines = []
+    event_lines = []
+    beatmap = {"timingPoints": [], "hitObjects": []}
 
-    found_image = False
+    section_reg = re.compile('^\[([a-zA-Z0-9]+)\]$')
+    key_val_reg = re.compile('^([a-zA-Z0-9]+)[ ]*:[ ]*(.+)$')
+    osu_section = None
 
-    file_osu_inprogress = str(index) + "_HX_NOT_DONE.osu"
-    file_osu_done = str(index) + "_HX.osu"
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line:
+            continue
+        match_section = section_reg.match(line)
+        if match_section:
+            osu_section = match_section.group(1).lower()
+            continue
 
-    lib_path = os.path.join('', 'lib')
-    file_lib_path = os.path.join(lib_path, osu_file)
+        match_key_val = key_val_reg.match(line)
+        if osu_section == 'general' and match_key_val:
+            general_lines[match_key_val.group(1)] = match_key_val.group(2)
+        if osu_section == 'editor' and match_key_val:
+            editor_lines[match_key_val.group(1)] = match_key_val.group(2)
+        if osu_section == 'metadata' and match_key_val:
+            metadata_lines[match_key_val.group(1)] = match_key_val.group(2)
+        if osu_section == 'difficulty' and match_key_val:
+            difficulty_lines[match_key_val.group(1)] = match_key_val.group(2)
+        if osu_section == 'events':
+            event_lines.append(line)
+        elif osu_section == 'timingpoints':
+            timing_lines.append(line)
+        elif osu_section == 'hitobjects':
+            object_lines.append(line)
 
-    print("Found Map: ", osu_file)
-    music_file = ''
-    with open(os.path.join(os.getcwd(), osu_file), 'r', encoding='utf-8') as f:
-        lines = f.readlines()
+    first_timing = None
+    last_timing = None
+    first_note = None
+    last_note = None
+    bpm_list = []
 
-        timing_points_index = lines.index('[TimingPoints]\n')
-        hit_objects_index = lines.index('[HitObjects]\n')
-
-        try:
-            epilepsy_warning = lines.index('EpilepsyWarning: 1\n')
-            lines[epilepsy_warning] = '\n'
-        except:
-            print("EpilepsyWarning Not Found")
-
-        audio_is_mp3 = False
-
-        timing_lines = []
-        object_lines = []
-        events_lines = []
-
-        section_reg = re.compile('^\[([a-zA-Z0-9]+)\]$')
-        osu_section = None
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
-            match = section_reg.match(line)
-            if match:
-                osu_section = match.group(1).lower()
-                continue
-            if osu_section == 'timingpoints':
-                timing_lines.append(line)
-            elif osu_section == 'hitobjects':
-                object_lines.append(line)
-            elif osu_section == 'events':
-                events_lines.append(line)
-
-            if line.startswith('Title:'):
-                words = line[6:].strip()
-                title_non_unicode = words.encode("cp949")
-            if line.startswith('TitleUnicode:'):
-                words = line[13:].strip()
-                try:
-                    title_unicode = words.encode("cp949")
-                except:
-                    title_unicode = title_non_unicode
-                    print("TitleUnicode Error, used Title")
-            if line.startswith('Artist:'):
-                words = line[7:].strip()
-                artist_non_unicode = words.encode("cp949")
-                print("Artist : ", artist_non_unicode)
-            if line.startswith('ArtistUnicode:'):
-                words = line[14:].strip()
-                try:
-                    artist_unicode = words.encode("cp949")
-                except:
-                    artist_unicode = artist_non_unicode
-                    print("ArtistUnicode Error, used Artist")
-                print("Artist : ", artist_unicode)
-            if line.startswith('Creator:'):
-                words = line[8:].strip()
-                try:
-                    creator = words.encode("cp949")
-                except:
-                    creator = words.encode()
-                print("Creator : ", creator)
-            if line.startswith('AudioFilename:'):
-                filename = line[15:].strip()
-                print("Audio File : ", filename)
-                if filename.endswith('.mp3'):
-                    music_file = filename
-                    filename = filename[:-4] + '.ogg'
-                    lines[i] = f"AudioFilename: {filename}\n"
-                    audio_is_mp3 = True
-            if line.startswith('AudioLeadIn:'):
-                lines[i] = "AudioLeadIn:0\n"
-            if line.startswith('Version:'):
-                words = line[8:].strip()
-                try:
-                    difficulty_name = words.encode("cp949")
-                except:
-                    difficulty_name = title_unicode
-        # Check for last note offset
-
-        try:
-            del last_offset
-        except:
-            print("no last offset")
-
-        for object in object_lines:
-            note = object.split(',')
-            third_column = remove_trailing_zeros(note[2])
-            last_column = remove_trailing_zeros(note[-1].split(':')[0])
-            try:
-                last_offset
-            except NameError:
-                last_offset = third_column
-            last_offset = max(last_offset, third_column, last_column)
-
-        bpm_list = []
-        # Get BPM List
-        for i, timing in enumerate(timing_lines):
-            point = timing.split(',')
-            timing_offset = float(point[0])
-            timing_bpm = float(point[1])
-
-            if (timing_bpm > 0):
-                bpm_list.append(timing)
-
-        # Find Main BPM
-        bpm_duration = {}
-        start = float(bpm_list[0].split(',')[0])
-        first_offset = start
-        for i, each_time in enumerate(bpm_list):
-            time = each_time.split(',')
-
-            start = float(time[0])
-            if (i == 0):
-                start = 0
-            try:
-                end = float(bpm_list[i+1].split(',')[0])
-            except:
-                end = last_offset
-            duration = end - start
-            bpm_now = round(float(time[1]), 10)
-            if bpm_now in bpm_duration:
-                bpm_duration[bpm_now] += duration
+    for line in timing_lines:
+        points = line.split(',')
+        offset = int(float(points[0]))
+        if first_timing is None or offset < first_timing:
+            first_timing = offset
+        if last_timing is None or offset > last_timing:
+            last_timing = offset
+        timing_point = {"offset": offset,
+                        "beatLength": float(points[1]),
+                        "velocity": 1,
+                        "timingSignature": 4,
+                        "sampleSetId": 2,
+                        "customSampleIndex": int(points[4]),
+                        "sampleVolume": int(points[5]),
+                        "timingChange": 1,
+                        "kiaiTimeActive": points[7]}
+        if not math.isnan(timing_point["beatLength"]) and timing_point["beatLength"] != 0:
+            if timing_point["beatLength"] > 0:
+                bpm = round(60000/timing_point["beatLength"], 3)
+                timing_point["bpm"] = bpm*input_multiply_bpm
+                bpm_list.append(timing_point)
             else:
-                bpm_duration[bpm_now] = duration
+                timing_point["velocity"] = round(
+                    abs(100 / timing_point["beatLength"]), 10)
+        beatmap["timingPoints"].append(timing_point)
+    print("first timing:", first_timing)
+    print("last timing:", last_timing)
 
-        longest_duration_bpm = max(bpm_duration, key=bpm_duration.get)
-        longest_duration_bpm = float(longest_duration_bpm)*input_multiply_bpm
-        print(
-            f'The bpm with the longest duration is {60000/(float(longest_duration_bpm))}')
+    for obj in object_lines:
+        objects = obj.split(',')
+        note_offset = int(objects[2])
+        last_column = objects[5].split(':')
+        ln_offset = int(last_column[0])
+        if first_note is None or note_offset < first_note:
+            first_note = note_offset
+        if last_note is None or note_offset > last_note:
+            last_note = note_offset
+        if ln_offset > last_note:
+            last_note = ln_offset
 
-        print("First Offset")
-        print(first_offset)
+        hit_object = {"x": objects[0],
+                      "y": objects[1],
+                      "offset": note_offset,
+                      "objectType": objects[3],
+                      "soundType": objects[4],
+                      "offsetLongNote": ln_offset,
+                      "rest": last_column[1:]}
+        beatmap["hitObjects"].append(hit_object)
 
-        print("Last Offset")
-        print(last_offset)
+    print("first note:", first_note)
+    print("last note:", last_note)
 
-        append_offset_util = round(float(longest_duration_bpm)*4)
-        print("Append Offset Utility")
-        print(append_offset_util)
+    bpm_now = None
+    bpm_duration = {}
+    start = min(0, first_note, first_timing)
 
-        new_timing_last_line = time
+    for i, each_time in enumerate(bpm_list):
+        try:
+            end = bpm_list[i+1]["offset"]
+        except IndexError:
+            end = last_note
+        duration = end - start
+        bpm_ack = each_time["bpm"]
 
-        time[1] = longest_duration_bpm
-        time[0] = last_offset + append_offset_util
-        timing_lines.append(','.join(map(str, new_timing_last_line)))
-
-        if (first_offset < append_offset_util):
-            print("True")
-            append_offset = append_offset_util - first_offset
+        if bpm_now in bpm_duration:
+            bpm_duration[bpm_ack] += duration
         else:
-            room = first_offset//append_offset_util
-            offset_need = append_offset_util*(room+1)
-            append_offset = offset_need - first_offset
-        while (append_offset + first_offset < 2000):
-            print("Offset is < 2000")
-            append_offset = append_offset + append_offset_util
-        print("APPEND OFFSET")
-        print(append_offset)
-        print("NEW FIRST BPM OFFSET")
-        print(append_offset + first_offset)
+            bpm_duration[bpm_ack] = duration
 
-        # Delete ALL Hit Objects
-        del lines[hit_objects_index+1:]
+    main_bpm = max(bpm_duration, key=bpm_duration.get)
+    main_beatlength = round(60000/main_bpm, 12)
+    main_one_measure_offset = main_beatlength*4
 
-        # Rewrite Notes to Move to aligned first room
-        for i, object in enumerate(object_lines):
-            note = object.split(',')
-            third_column = remove_trailing_zeros(note[2])
-            last_column = note[-1].split(':')
-            note[2] = third_column + append_offset
-            if (last_column[0] != "0"):
-                last_column[0] = remove_trailing_zeros(
-                    last_column[0]) + append_offset
-                note[-1] = ':'.join(map(str, last_column))
-            object_lines[i] = ','.join(map(str, note))
-            lines.insert(hit_objects_index+i+1, object_lines[i]+'\n')
+    print("main bpm", main_bpm)
+    print("main beatlength:", main_beatlength)
+    print("one measure offset", main_one_measure_offset)
+    # to_delete = 0
+    # for i,timing in enumerate(beatmap["timingPoints"]):
+    # 	if timing["offset"] > last_note:
+    # 			to_delete += 1
+    # if(to_delete > 0):
+    # 	del beatmap["timingPoints"][to_delete:]
 
-        # Delete ALL Offsets
-        del lines[timing_points_index+1:hit_objects_index-1]
+    for i, timing in enumerate(beatmap["timingPoints"]):
+        if "bpm" in timing:
+            bpm_now = timing["bpm"]
 
-        # Add Offset at 0 to fix Bug
-        first_timing = timing_lines[0].split(',')
-        if (float(first_timing[0]) > 0):
-            first_timing[0] = 0
-            first_timing[2] = 4
-            first_timing[3] = 2
-            first_timing[1] = longest_duration_bpm
-            first_timing = ','.join(map(str, first_timing))
-            lines.insert(timing_points_index+1, first_timing+'\n')
+        if "velocity" in timing:
+            timing["bpm"] = bpm_now * timing["velocity"]
 
-        # Rewrite BPM Lines (BETA)
-        for i, timing in enumerate(timing_lines):
-            point = timing.split(',')
-            timing_offset = float(point[0])
-            timing_bpm = float(point[1])
+        if (i < len(beatmap["timingPoints"]) - 1):
+            if (beatmap["timingPoints"][i+1]["offset"] == timing["offset"]):
+                beatmap["timingPoints"][i+1]["bpm"] = bpm_now * \
+                    beatmap["timingPoints"][i+1]["velocity"]
+                del beatmap["timingPoints"][i]
 
-            if i < len(timing_lines) - 1:
-                next = timing_lines[i+1].split(',')
-                next_timing_offset = float(next[0])
-                next_timing_bpm = float(next[1])
-                if (timing_offset == next_timing_offset and next_timing_bpm < 0 and timing_bpm > 0):
-                    point[1] = timing_bpm*(abs(next_timing_bpm)/100)
-                    next[1] = -100
-                    timing_lines[i+1] = ','.join(map(str, next))
+    real_offset_index = 0
+    indices_to_delete = []
+    for i, timing in enumerate(beatmap["timingPoints"]):
+        if (timing["offset"] <= first_note):
+            real_offset_index = i
+        if timing["offset"] > last_note:
+            indices_to_delete.append(i)
+    indices_to_keep = [i for i in range(
+        len(beatmap["timingPoints"])) if i not in indices_to_delete]
+    beatmap["timingPoints"] = [beatmap["timingPoints"][i]
+                               for i in indices_to_keep]
+    beatmap["timingPoints"].append({'offset': last_note+2000, 'beatLength': main_beatlength, 'velocity': 1, 'timingSignature': 4,
+                                    'sampleSetId': 2, 'customSampleIndex': 0, 'sampleVolume': 0, 'timingChange': '1', 'kiaiTimeActive': '0', 'bpm': main_bpm})
 
-            point[0] = remove_trailing_zeros(
-                float(point[0]) + append_offset)
+    if real_offset_index > 0:
+        del beatmap["timingPoints"][:real_offset_index]
 
-            if (timing_bpm > 0):
-                point[1] = str(float(point[1]) * input_multiply_bpm)
-            point[2] = 4
-            point[3] = 2
+    first_timing = beatmap["timingPoints"][0]["offset"]
+    print("first timing adjusted", first_timing)
+    append_offset = (main_one_measure_offset*2) - first_timing
 
-            timing_lines[i] = ','.join(map(str, point))
-            lines.insert(timing_points_index+i+2, timing_lines[i]+'\n')
+    while (first_note + append_offset <= 2000):
+        append_offset = append_offset + main_one_measure_offset
+    # while( append_offset + first_timing <= first_note-append_offset):
+    # 	append_offset = append_offset + main_one_measure_offset
 
-        print("Writing a new HX.osu File")
-        with open("lib/"+file_osu_inprogress, 'w', encoding='UTF-8') as f:
-            f.writelines(lines)
-            f.close()
+    append_offset = int(append_offset)
+    print("append offset", append_offset)
+    print("new offset", first_timing + append_offset)
 
-    image_file_name = events_lines[1].split(',')[2].strip('\"')
-    print(image_file_name)
-    if is_image(image_file_name):
-        print("Found Image: ", image_file_name)
-        image = Image.open(image_file_name)
-        image = image.convert("RGB")
-        image = image.resize((800, 600))
-        cover_file_path = f'{file_lib_path}_800x600.jpg'
-        image.save(cover_file_path, format='JPEG')
-        image = image.resize((80, 80))
-        bmp_file_path = f'{file_lib_path}_80x80.bmp'
-        image.save(bmp_file_path, format='BMP')
-        found_image = True
-    if (audio_is_mp3):
-        print("Converting MP3 to OGG")
-        target_file = music_file.replace(".mp3", ".ogg")
-        silent_segment = AudioSegment.silent(duration=append_offset)
-        the_song = AudioSegment.from_mp3(music_file)
-        final_song = silent_segment + the_song
-        chunks = final_song[::300000]
+    for i, timing in enumerate(beatmap["timingPoints"]):
+        timing["offset"] = timing["offset"] + append_offset
+        beatmap["timingPoints"][i] = timing
+    beatmap["timingPoints"].insert(0, {'offset': 0, 'beatLength': main_beatlength, 'velocity': 1, 'timingSignature': 4,
+                                       'sampleSetId': 2, 'customSampleIndex': 0, 'sampleVolume': 0, 'timingChange': '1', 'kiaiTimeActive': '0', 'bpm': main_bpm})
 
-        # Export all of the individual chunks as wav files
-        chunks_name = []
-        chunk_length = []
-        for i, chunk in enumerate(chunks):
-            chunk_name = str(index)+"_song_part_{0}.ogg".format(i)
-            chunks_name.append(chunk_name)
-            print("Exporting", chunk_name)
-            print("Length in ms")
-            print(len(chunk))
-            chunk_length.append(len(chunk))
-            chunk.export(chunk_name, format="ogg")
-            shutil.move(chunk_name, "lib/" + chunk_name)
-            if (i == 0):
-                try:
-                    os.rename("lib/" + chunk_name, "lib/" + target_file)
-                except:
-                    os.remove("lib/" + target_file)
-                    os.rename("lib/" + chunk_name, "lib/" + target_file)
-                chunks_name[0] = target_file
-    else:
-        shutil.move(music_file, "lib/" + music_file)
+    for i, timing in enumerate(beatmap["hitObjects"]):
+        timing["offset"] = timing["offset"] + append_offset
+        if timing["objectType"] == '128':
+            timing["offsetLongNote"] = timing["offsetLongNote"] + append_offset
+        beatmap["hitObjects"][i] = timing
 
-    with open("lib/"+file_osu_inprogress, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-        sound_samples_index = lines.index('//Storyboard Sound Samples\n')
-        sound_offset = 0
-        for i, name in enumerate(chunks_name):
-            if i != 0:
-                sound_offset = sound_offset + chunk_length[i-1] + 1
-                lines.insert(sound_samples_index + i, "Sample," +
-                             str(sound_offset)+',0,"'+name+'",100\n')
+    music_file = general_lines["AudioFilename"]
+    general_lines["AudioFilename"] = music_file[:-3] + "ogg"
+    general_lines["AudioLeadIn"] = 0
 
-    with open("lib/"+file_osu_done, 'w', encoding='UTF-8') as f:
-        f.writelines(lines)
-        f.close()
+    if "EpilepsyWarning" in general_lines:
+        general_lines.pop("EpilepsyWarning")
+
+    found_image = write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, general_lines,
+                            editor_lines, metadata_lines, difficulty_lines, event_lines, beatmap, input_offset)
+
+    cwd = os.getcwd()
+    hx_osu_path = os.path.join(cwd, inprogress_osu_folder, "HX.osu")
+    hx_bms_path = os.path.join(cwd, inprogress_osu_folder, "HX.bms")
 
     print("Converting to BMS")
-    bms_file = file_osu_done.replace(".osu", ".bms")
-    subprocess.run('osu2bms '+file_osu_done+' '+bms_file+' --key-map-o2mania',
+    subprocess.run('osu2bms '+hx_osu_path+' '+hx_bms_path+' --key-map-o2mania',
                    shell=True, cwd="lib")
 
-    print("Adjust Last BPM to the Line")
-    with open('lib/'+bms_file, 'r', encoding='UTF-8') as bms:
-        bms_lines = bms.readlines()
-        for bms_line in reversed(bms_lines):
-            if bms_line.strip():
-                bms_last_line = list(bms_line)
-                break
-        bms_last_line[3] = int(bms_last_line[3])+1
-        bms_last_line[4] = 0
-        bms_last_line[5] = 3
-
-        del bms_last_line[7:]
-        bms_last_line.append(64)
-        bms_last_line.append("\n")
-        bms_last_line_final = ''.join(map(str, bms_last_line))
-        bms_lines.append(bms_last_line_final)
-    o2jam_bms = "O2JAM_"+bms_file
-    with open('lib/'+o2jam_bms, 'w', encoding='utf-8') as o2jam:
-        o2jam.writelines(bms_lines)
-        o2jam.close()
-
     print("Converting to OJN")
-    subprocess.run('enojn2 '+input_id+' '+o2jam_bms, shell=True, cwd="lib")
-    shutil.move("lib/o2ma"+input_id+".ojn", "o2ma"+input_id+".ojn")
-    shutil.move("lib/o2ma"+input_id+".ojm", "o2ma"+input_id+".ojm")
-
-    for i, chunk in enumerate(chunks_name):
-        chunk_wav_file = chunk.replace(".ogg", ".wav")
-        os.remove("lib/" + chunk)
-        os.remove("lib/" + chunk_wav_file)
+    subprocess.run('enojn2 '+input_id+' '+hx_bms_path, shell=True, cwd="lib")
+    shutil.move("lib/o2ma"+input_id+".ojn", "Output/o2ma"+input_id+".ojn")
+    shutil.move("lib/o2ma"+input_id+".ojm", "Output/o2ma"+input_id+".ojm")
 
     print("Apply Metadata, Cover and BMP")
-    with open('o2ma'+input_id+'.ojn', 'r+b') as f:
+    ojn_struct = '< i 4s f i f 4h 3i 3i 3i 3i h h 20s i i 64s 32s 32s 32s i 3i 3i i'
+    with open(os.path.join("Output", 'o2ma'+input_id+'.ojn'), 'r+b') as f:
         data = f.read()
         songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
             ojn_struct, data[:300])
+
         if (use_title):
-            title = title_unicode
+            try:
+                title = metadata_lines["TitleUnicode"].encode("cp949")
+            except:
+                title = metadata_lines["Title"].encode("cp949")
         else:
-            title = difficulty_name
-        artist = artist_unicode
-        noter = creator
+            title = metadata_lines["Version"].encode("cp949")
+
+        try:
+            artist = metadata_lines["ArtistUnicode"].encode("cp949")
+        except:
+            artist = metadata_lines["Artist"].encode("cp949")
+        noter = metadata_lines["Creator"].encode("cp949")
         level_ex = input_level
         level_nx = input_level
         level_hx = input_level
@@ -379,6 +268,9 @@ def convert_to_o2jam(input):
 
         f.seek(0)
         if found_image:
+            cover_file_path = os.path.join(
+                inprogress_osu_folder, '800x600.jpg')
+            bmp_file_path = os.path.join(inprogress_osu_folder, '80x80.bmp')
             cover_file_data = open(cover_file_path, 'rb').read()
             cover_size = len(cover_file_data)
             bmp_file_data = open(bmp_file_path, 'rb').read()
@@ -396,13 +288,42 @@ def convert_to_o2jam(input):
             new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
                                           measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
             f.write(new_header_data)
-    print("Done Converting Osu to O2Jam")
+    print("Done :", osu)
 
 
 def main():
     print("Osu to O2jam Converter")
-    folder_path = os.getcwd()
-    osu_files = glob.glob(folder_path + '/*.osu')
+    input_folder = "Input"
+    inprogress_folder = "Inprogress"
+    output_folder = "Output"
+
+    os.makedirs(input_folder, exist_ok=True)
+    os.makedirs(output_folder, exist_ok=True)
+
+    if os.path.exists(inprogress_folder):
+        shutil.rmtree(inprogress_folder)
+    os.mkdir(inprogress_folder)
+
+    # file_handler = logging.FileHandler(filename='tmp.txt')
+    # stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    # handlers = [file_handler, stdout_handler]
+
+    # logging.basicConfig(
+    #    level=logging.DEBUG,
+    #    format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
+    #    handlers=handlers
+    # )
+
+    # logger = logging.getLogger('LOGGER_NAME')
+    #
+    # logger.debug('The debug message is displaying')
+    # logger.info('The info message is displaying')
+    # logger.warning('The warning message is displaying')
+    # logger.error('The error message is displaying')
+    # logger.critical('The critical message is displaying')
+
+    osu_files = glob.glob(os.path.join(
+        input_folder, "**/*.osu"), recursive=True)
     osu_count = len(osu_files)
 
     # input_id = "1000"
@@ -411,24 +332,49 @@ def main():
     # input_multiply_bpm = 1
 
     print(".osu count :", osu_count)
-    if(osu_count > 1):
+    if (osu_count > 1):
         print("Multiple .osu file detected")
-        use_title = yes_or_no("Would you like to use Title (Y) / Difficulty (N) as a Song name in o2jam?")
+        use_title = yes_or_no(
+            "Would you like to use Title (Y) / Difficulty (N) as a Song name in o2jam?")
     else:
         use_title = True
-    input_id = str(input("Enter the ID Default (1000) : ") or "1000")
+    input_id = int(input("Enter the ID Default (1000) : ") or "1000")
     input_level_raw = int(input("Enter the Level Default (1): ") or "1")
     input_level = int(input_level_raw)
-    input_multiply_bpm = float(input("Multiply BPM (Ex. 0.5 ,0.75) Default (1) : ") or "1")
-    input_multiply_bpm = 1/input_multiply_bpm
+    input_multiply_bpm = float(
+        input("Multiply BPM (Ex. 0.5 ,0.75) Default (1) : ") or "1")
+    input_offset = int(input(
+        "Enter the Offset (Music Come Faster by X millisecs) Default (0) : ") or "0")
+    # input_multiply_bpm = 1/input_multiply_bpm
+
+    if not osu_files:
+        print("Please put Osu Beatmap in 'Input' Folder")
+        input("Press Enter to exit...")
+        os._exit()
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        for index, osu_file in enumerate(osu_files):
-            executor.submit(convert_to_o2jam, (index, input_id,
-                            osu_file, input_level, input_multiply_bpm,
-                             use_title))
-    print("ALL DONE!")
+        for index, osu in enumerate(osu_files):
+            parent = os.path.dirname(osu)
+            parent_name = os.path.basename(parent)
+            files = os.listdir(parent)
+
+            inprogress_osu_folder = os.path.join(
+                inprogress_folder, f'{index}_{parent_name.replace(" ", "_")}')
+            os.mkdir(inprogress_osu_folder)
+            for file in files:
+
+                source_path = os.path.join(parent, file)
+
+                if not imghdr.what(source_path) and not file.endswith('.osu'):
+                    shutil.copy(source_path, inprogress_osu_folder)
+
+            result = executor.submit(convert_to_o2jam(index, input_id, input_level,
+                                                      input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, input_offset))
+            print(result)
+    # shutil.rmtree(inprogress_folder)
+
 
 if __name__ == '__main__':
     freeze_support()
     main()
+    print("ALL DONE!")
