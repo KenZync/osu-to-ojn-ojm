@@ -26,14 +26,23 @@ def write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, gen
 
         print(music_file)
         print("Converting MP3 to OGG")
-        if (music_file.endswith('mp3')):
+        music_file_path = os.path.join(inprogress_osu_folder, music_file)
+        music_exist = os.path.exists(music_file_path)
+        if not music_exist:
+            raise Exception("Music Not Found, Stopping process")
+        try:
             the_song = AudioSegment.from_mp3(
-                os.path.join(inprogress_osu_folder, music_file))
+                os.path.join(music_file_path))
             target_file = music_file.replace(".mp3", ".ogg")
-        if (music_file.endswith('ogg')):
+        except:
             the_song = AudioSegment.from_ogg(
-                os.path.join(inprogress_osu_folder, music_file))
+                os.path.join(music_file_path))
             target_file = music_file
+        # if (music_file.endswith('mp3')):
+        #     the_song = AudioSegment.from_mp3(
+        #         os.path.join(inprogress_osu_folder, music_file))
+        #     target_file = music_file.replace(".mp3", ".ogg")
+        # if (music_file.endswith('ogg')):
 
         append_offset = append_offset + input_offset
         if (append_offset >= 0):

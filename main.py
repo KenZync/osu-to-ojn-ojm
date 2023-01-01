@@ -372,8 +372,8 @@ def main():
                 if not imghdr.what(source_path) and not file.endswith('.osu'):
                     shutil.copy(source_path, inprogress_osu_folder)
 
-            result = executor.submit(convert_to_o2jam(index, input_id, input_level,
-                                                      input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, input_offset))
+            result = executor.submit(convert_to_o2jam,index, input_id, input_level,
+                                                      input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, input_offset)
             print(result)
     # shutil.rmtree(inprogress_folder)
 
