@@ -358,7 +358,7 @@ def main():
     if not osu_files:
         print("Please put Osu Beatmap in 'Input' Folder")
         input("Press Enter to exit...")
-        os._exit()
+        os._exit(1)
 
     # Use glob to get a list of all the o2ma*.ojn files in the current directory
     ojn_files = glob.glob(os.path.join(output_folder, 'o2ma*.ojn'))
