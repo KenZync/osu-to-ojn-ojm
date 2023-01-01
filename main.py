@@ -200,6 +200,10 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
         timing["offset"] = timing["offset"] + append_offset
         if timing["objectType"] == '128':
             timing["offsetLongNote"] = timing["offsetLongNote"] + append_offset
+            if timing["offset"] == timing["offsetLongNote"]:
+                timing["objectType"] = 1
+                timing["offsetLongNote"] = 0
+
         beatmap["hitObjects"][i] = timing
 
     music_file = general_lines["AudioFilename"]
