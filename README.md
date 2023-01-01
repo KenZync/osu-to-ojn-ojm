@@ -1,6 +1,6 @@
 # Osu to O2Jam Converter
 
-1.Move File .osu and .mp3 and .jpg or .png into this folder
+1.Move Osu Mania Beatmap to Input Folder
 
 2.Run osu2ojnojm.exe
 
