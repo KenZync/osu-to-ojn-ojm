@@ -12,10 +12,14 @@ from multiprocessing import freeze_support
 from osu_writer import write_osu
 from utils import yes_or_no
 import concurrent.futures
+from config import read_config
 
 
-def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, input_offset):
-    input_id = str(input_id + index)
+def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID):
+    if config_auto_ID:
+        input_id = str(input_id)
+    else:
+        input_id = str(input_id + index)
 
     with open(osu, encoding="utf-8") as file:
         lines = file.readlines()
@@ -222,16 +226,19 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
 
     print("Converting to BMS")
     subprocess.run('osu2bms '+hx_osu_path+' '+hx_bms_path+' --key-map-o2mania',
-                   shell=True, cwd="lib")
+                   shell=True, cwd="lib", stdout=subprocess.DEVNULL)
 
     print("Converting to OJN")
-    subprocess.run('enojn2 '+input_id+' '+hx_bms_path, shell=True, cwd="lib")
-    shutil.move("lib/o2ma"+input_id+".ojn", "Output/o2ma"+input_id+".ojn")
-    shutil.move("lib/o2ma"+input_id+".ojm", "Output/o2ma"+input_id+".ojm")
+    subprocess.run('enojn2 '+input_id+' '+hx_bms_path,
+                   shell=True, cwd="lib", stdout=subprocess.DEVNULL)
+    shutil.move("lib/o2ma"+input_id+".ojn",
+                os.path.join(output_folder, "o2ma"+input_id+".ojn"))
+    shutil.move("lib/o2ma"+input_id+".ojm",
+                os.path.join(output_folder, "o2ma"+input_id+".ojm"))
 
     print("Apply Metadata, Cover and BMP")
     ojn_struct = '< i 4s f i f 4h 3i 3i 3i 3i h h 20s i i 64s 32s 32s 32s i 3i 3i i'
-    with open(os.path.join("Output", 'o2ma'+input_id+'.ojn'), 'r+b') as f:
+    with open(os.path.join(output_folder, 'o2ma'+input_id+'.ojn'), 'r+b') as f:
         data = f.read()
         songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
             ojn_struct, data[:300])
@@ -292,14 +299,32 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
             new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
                                           measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
             f.write(new_header_data)
-    print("Done :", osu)
+    print(f"Done ID {input_id}:", osu)
 
 
 def main():
     print("Osu to O2jam Converter")
-    input_folder = "Input"
-    inprogress_folder = "Inprogress"
-    output_folder = "Output"
+
+    config = read_config()
+    config_input = config['Path']['input']
+    config_inprogress = config['Path']['inprogress']
+    config_output = config['Path']['output']
+
+    config_o2maID = int(config['Default']['o2maID'])
+    config_level = int(config['Default']['level'])
+    config_multiplybpm = float(config['Default']['multiplybpm'])
+    config_offset = int(config['Default']['offset'])
+    config_usetitle = config.getboolean('Default', 'usetitle')
+
+    config_auto_ID = config.getboolean('Automation', 'autoID')
+    config_auto_remove_input = config.getboolean(
+        'Automation', 'autoremoveinput')
+    config_auto_remove_inprogress = config.getboolean(
+        'Automation', 'autoremoveinprogress')
+
+    input_folder = config_input
+    inprogress_folder = config_inprogress
+    output_folder = config_output
 
     os.makedirs(input_folder, exist_ok=True)
     os.makedirs(output_folder, exist_ok=True)
@@ -330,34 +355,60 @@ def main():
         input_folder, "**/*.osu"), recursive=True)
     osu_count = len(osu_files)
 
-    # input_id = "1000"
-    # input_level = 1
-    # use_title = True
-    # input_multiply_bpm = 1
-
-    print(".osu count :", osu_count)
-    if (osu_count > 1):
-        print("Multiple .osu file detected")
-        use_title = yes_or_no(
-            "Would you like to use Title (Y) / Difficulty (N) as a Song name in o2jam?")
-    else:
-        use_title = True
-    input_id = int(input("Enter the ID Default (1000) : ") or "1000")
-    input_level_raw = int(input("Enter the Level Default (1): ") or "1")
-    input_level = int(input_level_raw)
-    input_multiply_bpm = float(
-        input("Multiply BPM (Ex. 0.5 ,0.75) Default (1) : ") or "1")
-    input_offset = int(input(
-        "Enter the Offset (Music Come Faster by X millisecs) Default (0) : ") or "0")
-    # input_multiply_bpm = 1/input_multiply_bpm
-
     if not osu_files:
         print("Please put Osu Beatmap in 'Input' Folder")
         input("Press Enter to exit...")
         os._exit()
 
+    # Use glob to get a list of all the o2ma*.ojn files in the current directory
+    ojn_files = glob.glob(os.path.join(output_folder, 'o2ma*.ojn'))
+
+    # Extract the IDs from the file names and store them in a list
+    ids = set([int(file.split('o2ma')[1].split('.')[0]) for file in ojn_files])
+
+    # Initialize a list to store the generated IDs
+    generated_ids = []
+
+    # Use a loop to generate the desired number of IDs
+    for i in range(osu_count):
+        # Increment the current ID until it does not overlap with any of the IDs in the o2ma*.ojn files
+        current_id = config_o2maID
+        while current_id in ids:
+            current_id += 1
+        # Add the current ID to the list of generated IDs
+        generated_ids.append(current_id)
+        # Increment the starting ID for the next iteration
+        config_o2maID = current_id + 1
+
+    # The list of generated IDs will now contain the desired number of IDs that do not overlap with the IDs in the o2ma*.ojn files
+    print(generated_ids)
+    print(".osu count :", osu_count)
+
+    if config_auto_ID:
+        use_title = config_usetitle
+        input_level = config_level
+        input_multiply_bpm = config_multiplybpm
+        input_offset = config_offset
+    else:
+        if (osu_count > 1):
+            print("Multiple .osu file detected")
+            use_title = yes_or_no(
+                "Would you like to use Title (Y) / Difficulty (N) as a Song name in o2jam?")
+        else:
+            use_title = True
+        input_id = int(
+            input(f"Enter the ID Default ({config_o2maID}) : ") or config_o2maID)
+        input_level = int(
+            input(f"Enter the Level Default ({config_level}): ") or config_level)
+        input_multiply_bpm = float(
+            input(f"Multiply BPM (Ex. 0.5 ,0.75) Default ({config_multiplybpm}) : ") or config_multiplybpm)
+        input_offset = int(input(
+            f"Enter the Offset (Music Come Faster by X millisecs) Default ({config_offset}) : ") or config_offset)
+
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for index, osu in enumerate(osu_files):
+            if config_auto_ID:
+                input_id = generated_ids[index]
             parent = os.path.dirname(osu)
             parent_name = os.path.basename(parent)
             files = os.listdir(parent)
@@ -372,10 +423,19 @@ def main():
                 if not imghdr.what(source_path) and not file.endswith('.osu'):
                     shutil.copy(source_path, inprogress_osu_folder)
 
-            result = executor.submit(convert_to_o2jam,index, input_id, input_level,
-                                                      input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, input_offset)
-            print(result)
-    # shutil.rmtree(inprogress_folder)
+            result = executor.submit(convert_to_o2jam, index, input_id, input_level,
+                                     input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID)
+    #         print(result)
+    print("Concurrent Finish!")
+    print(config_auto_remove_inprogress)
+    if config_auto_remove_inprogress:
+        print("Deleting Folder : ", inprogress_folder)
+        shutil.rmtree(inprogress_folder)
+
+    if config_auto_remove_input:
+        print("Deleting Folder : ", input_folder)
+        shutil.rmtree(input_folder)
+        os.makedirs(input_folder)
 
 
 if __name__ == '__main__':
