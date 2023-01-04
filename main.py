@@ -10,7 +10,7 @@ import imghdr
 import subprocess
 from multiprocessing import freeze_support
 from osu_writer import write_osu
-from utils import yes_or_no
+from utils import calc_measures, yes_or_no
 import concurrent.futures
 from config import read_config
 
@@ -145,16 +145,10 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
     main_beatlength = round(60000/main_bpm, 12)
     main_one_measure_offset = main_beatlength*4
 
-    print("bpm durartion", bpm_duration)
+    print("bpm duration", bpm_duration)
     print("main bpm", main_bpm)
     print("main beatlength:", main_beatlength)
     print("one measure offset", main_one_measure_offset)
-    # to_delete = 0
-    # for i,timing in enumerate(beatmap["timingPoints"]):
-    # 	if timing["offset"] > last_note:
-    # 			to_delete += 1
-    # if(to_delete > 0):
-    # 	del beatmap["timingPoints"][to_delete:]
 
     for i, timing in enumerate(beatmap["timingPoints"]):
         if "bpm" in timing:
@@ -180,6 +174,20 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
         len(beatmap["timingPoints"])) if i not in indices_to_delete]
     beatmap["timingPoints"] = [beatmap["timingPoints"][i]
                                for i in indices_to_keep]
+
+    measure_count = calc_measures(beatmap["timingPoints"], last_note+2000 )
+    print("Measure Count : ",measure_count)
+    max_multiplier = 998/measure_count
+    print("Multiplier to Maximize : ", max_multiplier)
+
+    if(measure_count > 999):
+        main_bpm = main_bpm * max_multiplier
+        main_beatlength = round(60000/main_bpm, 12)
+        main_one_measure_offset = main_beatlength*4
+        for i, timing in enumerate(beatmap["timingPoints"]):
+            timing["bpm"] = timing["bpm"] * max_multiplier
+            beatmap["timingPoints"][i] = timing
+
     beatmap["timingPoints"].append({'offset': last_note+2000, 'beatLength': main_beatlength, 'velocity': 1, 'timingSignature': 4,
                                     'sampleSetId': 2, 'customSampleIndex': 0, 'sampleVolume': 0, 'timingChange': '1', 'kiaiTimeActive': '0', 'bpm': main_bpm})
 
@@ -192,8 +200,6 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
 
     while (first_note + append_offset <= 2000):
         append_offset = append_offset + main_one_measure_offset
-    # while( append_offset + first_timing <= first_note-append_offset):
-    # 	append_offset = append_offset + main_one_measure_offset
 
     append_offset = int(append_offset)
     print("append offset", append_offset)
@@ -428,7 +434,7 @@ def main():
                 if not imghdr.what(source_path) and not file.endswith('.osu'):
                     shutil.copy(source_path, inprogress_osu_folder)
 
-            executor.submit(convert_to_o2jam, index, input_id, input_level,
+            result = executor.submit(convert_to_o2jam, index, input_id, input_level,
                                      input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID)
 
     if config_auto_remove_inprogress:
