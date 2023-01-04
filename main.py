@@ -288,6 +288,15 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
         if (measure_hx > 300):
             measure_hx = 300
 
+        if (notecount_ex > 65535):
+            notecount_ex = 65535
+
+        if (notecount_nx > 65535):
+            notecount_nx = 65535
+
+        if (notecount_hx > 65535):
+            notecount_hx = 65535
+
         f.seek(0)
         if found_image:
             cover_file_path = os.path.join(
