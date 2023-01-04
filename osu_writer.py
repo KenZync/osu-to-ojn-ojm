@@ -3,6 +3,7 @@ import shutil
 from PIL import Image
 from utils import is_image
 from pydub import AudioSegment
+import concurrent.futures
 
 
 def write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, general_lines, editor_lines, metadata_lines, difficulty_lines, event_lines, beatmap, input_offset):
@@ -38,11 +39,6 @@ def write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, gen
             the_song = AudioSegment.from_ogg(
                 os.path.join(music_file_path))
             target_file = music_file
-        # if (music_file.endswith('mp3')):
-        #     the_song = AudioSegment.from_mp3(
-        #         os.path.join(inprogress_osu_folder, music_file))
-        #     target_file = music_file.replace(".mp3", ".ogg")
-        # if (music_file.endswith('ogg')):
 
         append_offset = append_offset + input_offset
         if (append_offset >= 0):
@@ -55,25 +51,18 @@ def write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, gen
         # Export all of the individual chunks as wav files
         chunks_name = []
         chunk_length = []
-        for i, chunk in enumerate(chunks):
-            chunk_name = "osu2ojnojm_song_part_{0}.ogg".format(i)
-            chunks_name.append(chunk_name)
-            print("Exporting", chunk_name)
-            print("Length in ms")
-            print(len(chunk))
-            chunk_length.append(len(chunk))
-            chunk.export(os.path.join(
-                inprogress_osu_folder, chunk_name), format="ogg")
-            # shutil.move(chunk_name, "lib/" + chunk_name)
-            if (i == 0):
-                try:
-                    os.rename(os.path.join(inprogress_osu_folder, chunk_name), os.path.join(
-                        inprogress_osu_folder, target_file))
-                except:
-                    os.remove(os.path.join(inprogress_osu_folder, target_file))
-                    os.rename(os.path.join(inprogress_osu_folder, chunk_name), os.path.join(
-                        inprogress_osu_folder, target_file))
-                chunks_name[0] = target_file
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            for i, chunk in enumerate(chunks):
+                chunk_name = "osu2ojnojm_song_part_{0}.ogg".format(i)
+                chunks_name.append(chunk_name)
+                print("Exporting", len(chunk), "ms" , chunk_name)
+                chunk_length.append(len(chunk))
+                executor.submit(chunk.export,os.path.join(
+                    inprogress_osu_folder, chunk_name), format="ogg")
+
+        os.rename(os.path.join(inprogress_osu_folder, chunks_name[0]), os.path.join(
+                                inprogress_osu_folder, target_file))
 
         image_file = None
 

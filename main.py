@@ -125,10 +125,14 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
     start = min(0, first_note, first_timing)
 
     for i, each_time in enumerate(bpm_list):
+        if i != 0:
+            start = each_time["offset"]
+
         try:
             end = bpm_list[i+1]["offset"]
         except IndexError:
             end = last_note
+            
         duration = end - start
         bpm_ack = each_time["bpm"]
 
@@ -141,6 +145,7 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
     main_beatlength = round(60000/main_bpm, 12)
     main_one_measure_offset = main_beatlength*4
 
+    print("bpm durartion", bpm_duration)
     print("main bpm", main_bpm)
     print("main beatlength:", main_beatlength)
     print("one measure offset", main_one_measure_offset)
@@ -423,11 +428,9 @@ def main():
                 if not imghdr.what(source_path) and not file.endswith('.osu'):
                     shutil.copy(source_path, inprogress_osu_folder)
 
-            result = executor.submit(convert_to_o2jam, index, input_id, input_level,
+            executor.submit(convert_to_o2jam, index, input_id, input_level,
                                      input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID)
-    #         print(result)
-    print("Concurrent Finish!")
-    print(config_auto_remove_inprogress)
+
     if config_auto_remove_inprogress:
         print("Deleting Folder : ", inprogress_folder)
         shutil.rmtree(inprogress_folder)
