@@ -1,10 +1,12 @@
 
+from hashlib import md5
 import os
 import struct
 
+ojn_struct = '< i 4s f i f 4h 3i 3i 3i 3i h h 20s i i 64s 32s 32s 32s i 3i 3i i'
+
 
 def apply_metadata(inprogress_osu_folder, output_folder, input_id, input_level, use_title, metadata_lines, found_image):
-    ojn_struct = '< i 4s f i f 4h 3i 3i 3i 3i h h 20s i i 64s 32s 32s 32s i 3i 3i i'
     with open(os.path.join(output_folder, 'o2ma'+input_id+'.ojn'), 'r+b') as f:
         data = f.read()
         songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
@@ -64,7 +66,7 @@ def apply_metadata(inprogress_osu_folder, output_folder, input_id, input_level, 
             bmp_size = len(bmp_file_data)
 
             new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
-                                            measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
+                                          measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
             f.write(new_header_data)
             f.seek(new_cover_offset)
             f.write(cover_file_data + bmp_file_data)
@@ -73,5 +75,35 @@ def apply_metadata(inprogress_osu_folder, output_folder, input_id, input_level, 
 
         else:
             new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
-                                            measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
+                                          measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
             f.write(new_header_data)
+
+
+def change_id(ojn_file_path, new_id):
+    with open(ojn_file_path, 'r+b') as f:
+        data = f.read()
+        songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
+            ojn_struct, data[:300])
+
+        songid = int(new_id)
+
+        ojm_file_raw = "o2ma"+new_id+".ojm"
+        ojm_file = ojm_file_raw.encode("cp949")
+
+        new_header_data = struct.pack(ojn_struct, songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex,
+                                      measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset)
+
+        f.seek(0)
+        f.write(new_header_data)
+
+
+def check_md5(ojn_file_path):
+    with open(ojn_file_path, 'r+b') as f:
+        data = f.read()
+        songid, signature, encode_version, genre, bpm, level_ex, level_nx, level_hx, unknown, event_ex, event_nx, event_hx, notecount_ex, notecount_nx, notecount_hx, measure_ex, measure_nx, measure_hx, package_ex, package_nx, package_hx, old_1, old_2, old_3, bmp_size, old_4, title, artist, noter, ojm_file, cover_size, time_ex, time_nx, time_hx, note_ex, note_nx, note_hx, cover_offset = struct.unpack(
+            ojn_struct, data[:300])
+
+        note_hx_length = cover_offset - note_hx
+        f.seek(note_hx)
+        note_hx_data = f.read(note_hx_length)
+        return md5(note_hx_data).hexdigest()

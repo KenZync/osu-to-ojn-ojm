@@ -6,6 +6,7 @@ import shutil
 from multiprocessing import freeze_support
 
 from config import read_config
+from ojn_writer import change_id, check_md5
 from osu2ojnojm import convert_to_o2jam
 from utils import yes_or_no
 
@@ -62,11 +63,49 @@ def main():
     osu_files = glob.glob(os.path.join(
         input_folder, "**/*.osu"), recursive=True)
     osu_count = len(osu_files)
+    print(".osu count :", osu_count)
+
+    input_ojn_files = glob.glob(os.path.join(
+        input_folder, "**/*.ojn"), recursive=True)
+    input_ojn_count = len(input_ojn_files)
+
+    output_ojn_files = glob.glob(os.path.join(
+        output_folder, "*.ojn"), recursive=True)
+    output_ojn_count = len(output_ojn_files)
 
     if not osu_files:
-        print("Please put Osu Beatmap in 'Input' Folder")
-        input("Press Enter to exit...")
-        os._exit(1)
+        print("Osu Beatmap Not Found in 'Input' Folder")
+    if input_ojn_files and not osu_files:
+        print("Changing to OJN Merger Mode")
+        print("Input Folder Music Count : ", input_ojn_count)
+        print("Output Folder Music Count : ", output_ojn_count)
+        i = 0
+        for ojn in input_ojn_files:
+            filename = os.path.basename(ojn)
+            while os.path.exists(os.path.join(output_folder, filename)):
+                i += 1
+                filename = "o2ma" + str(i) + ".ojn"
+
+            new_ojn_file_name = shutil.copy2(
+                ojn, os.path.join(output_folder, filename))
+            new_id = new_ojn_file_name.split('o2ma')[1].split('.')[0]
+            change_id(new_ojn_file_name, new_id)
+            ojm = ojn[:-1] + 'm'
+            new_ojm_file_name = "o2ma" + new_id + ".ojm"
+            shutil.copy2(ojm, os.path.join(output_folder, new_ojm_file_name))
+
+        result_output_ojn_files = glob.glob(os.path.join(
+            output_folder, "*.ojn"), recursive=True)
+        md5_list = []
+        print("Checking OJN/OJM Duplication")
+        for result_ojn in result_output_ojn_files:
+            md5 = check_md5(result_ojn)
+            if md5 in md5_list:
+                os.remove(result_ojn)
+                result_ojm = result_ojn[:-1] + 'm'
+                os.remove(result_ojm)
+            else:
+                md5_list.append(md5)
 
     # Use glob to get a list of all the o2ma*.ojn files in the current directory
     ojn_files = glob.glob(os.path.join(output_folder, 'o2ma*.ojn'))
@@ -87,10 +126,6 @@ def main():
         generated_ids.append(current_id)
         # Increment the starting ID for the next iteration
         config_o2maID = current_id + 1
-
-    # The list of generated IDs will now contain the desired number of IDs that do not overlap with the IDs in the o2ma*.ojn files
-    print(generated_ids)
-    print(".osu count :", osu_count)
 
     if config_auto_ID:
         use_title = config_usetitle
