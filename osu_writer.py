@@ -60,10 +60,14 @@ def write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, gen
                 chunk_length.append(len(chunk))
                 executor.submit(chunk.export,os.path.join(
                     inprogress_osu_folder, chunk_name), format="ogg")
-
-        os.rename(os.path.join(inprogress_osu_folder, chunks_name[0]), os.path.join(
+        print(inprogress_osu_folder, chunks_name[0])
+        print(inprogress_osu_folder, target_file)
+        if os.path.exists(os.path.join(inprogress_osu_folder, target_file)):
+            os.rename(os.path.join(inprogress_osu_folder, target_file), os.path.join(
+                    inprogress_osu_folder, "_Backup"+target_file))
+        else:
+            os.rename(os.path.join(inprogress_osu_folder, chunks_name[0]), os.path.join(
                                 inprogress_osu_folder, target_file))
-
         image_file = None
 
         hx_osu.write("\n[Events]\n")
