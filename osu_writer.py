@@ -64,7 +64,9 @@ def write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, gen
         print(inprogress_osu_folder, target_file)
         if os.path.exists(os.path.join(inprogress_osu_folder, target_file)):
             os.rename(os.path.join(inprogress_osu_folder, target_file), os.path.join(
-                    inprogress_osu_folder, "_Backup"+target_file))
+                    inprogress_osu_folder, "Backup_"+target_file))
+            os.rename(os.path.join(inprogress_osu_folder, chunks_name[0]), os.path.join(
+                                inprogress_osu_folder, target_file))
         else:
             os.rename(os.path.join(inprogress_osu_folder, chunks_name[0]), os.path.join(
                                 inprogress_osu_folder, target_file))
