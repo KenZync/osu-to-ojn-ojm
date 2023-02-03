@@ -222,6 +222,9 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
     if "EpilepsyWarning" in general_lines:
         general_lines.pop("EpilepsyWarning")
 
+    if "StoryFireInFront" in general_lines:
+        general_lines.pop("StoryFireInFront")
+
     found_image = write_osu(parent, osu, music_file, append_offset, inprogress_osu_folder, general_lines,
                             editor_lines, metadata_lines, difficulty_lines, event_lines, beatmap, input_offset)
 

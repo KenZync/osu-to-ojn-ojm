@@ -22,7 +22,7 @@ def merge_ojn(input_ojn_files, output_folder):
         shutil.copy2(ojm, os.path.join(output_folder, new_ojm_file_name))
 
     result_output_ojn_files = glob.glob(os.path.join(
-        output_folder, "*.ojn"), recursive=True)
+        output_folder, "o2ma*.ojn"), recursive=True)
     md5_list = []
     print("Checking OJN/OJM Duplication")
     for result_ojn in result_output_ojn_files:

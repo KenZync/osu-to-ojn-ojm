@@ -66,11 +66,11 @@ def main():
     print(".osu count :", osu_count)
 
     input_ojn_files = glob.glob(os.path.join(
-        input_folder, "**/*.ojn"), recursive=True)
+        input_folder, "**/o2ma*.ojn"), recursive=True)
     input_ojn_count = len(input_ojn_files)
 
     output_ojn_files = glob.glob(os.path.join(
-        output_folder, "*.ojn"), recursive=True)
+        output_folder, "o2ma*.ojn"), recursive=True)
     output_ojn_count = len(output_ojn_files)
 
     if not osu_files:
