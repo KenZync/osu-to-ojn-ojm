@@ -8,10 +8,17 @@ from ojn_writer import apply_metadata
 from osu_writer import write_osu
 from utils import calc_measures
 
+from rosu_pp_py import Beatmap, Calculator
 
 def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID):
+    map = Beatmap(path = osu)
+    calc = Calculator(mode = 3)
+    max_perf = calc.performance(map)
+    print("STARS:",max_perf.difficulty.stars)
+    
     if config_auto_ID:
         input_id = str(input_id)
+        input_level = int(round(max_perf.difficulty.stars*10))
     else:
         input_id = str(input_id + index)
 
