@@ -137,7 +137,7 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
         duration = end - start
         bpm_ack = each_time["bpm"]
 
-        if bpm_now in bpm_duration:
+        if bpm_ack in bpm_duration:
             bpm_duration[bpm_ack] += duration
         else:
             bpm_duration[bpm_ack] = duration
