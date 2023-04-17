@@ -16,15 +16,15 @@ def apply_metadata(inprogress_osu_folder, output_folder, input_id, input_level, 
             try:
                 title = metadata_lines["TitleUnicode"].encode("cp949")
             except:
-                title = metadata_lines["Title"].encode("cp949")
+                title = metadata_lines["Title"].encode("cp949", errors='replace')
         else:
-            title = metadata_lines["Version"].encode("cp949")
+            title = metadata_lines["Version"].encode("cp949", errors='replace')
 
         try:
             artist = metadata_lines["ArtistUnicode"].encode("cp949")
         except:
-            artist = metadata_lines["Artist"].encode("cp949")
-        noter = metadata_lines["Creator"].encode("cp949")
+            artist = metadata_lines["Artist"].encode("cp949", errors='replace')
+        noter = metadata_lines["Creator"].encode("cp949", errors='replace')
         level_ex = input_level
         level_nx = input_level
         level_hx = input_level
