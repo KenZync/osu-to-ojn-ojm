@@ -24,6 +24,8 @@ def main():
     config_multiplybpm = float(config['Default']['multiplybpm'])
     config_offset = int(config['Default']['offset'])
     config_usetitle = config.getboolean('Default', 'usetitle')
+    config_lnMode = config['Default']['lnMode']
+    config_lengthGap = config['Default']['lengthGap']
 
     config_auto_ID = config.getboolean('Automation', 'autoID')
     config_auto_remove_input = config.getboolean(
@@ -106,6 +108,8 @@ def main():
         input_level = config_level
         input_multiply_bpm = config_multiplybpm
         input_offset = config_offset
+        ln_mode = int(config_lnMode)
+        length_gap = int(config_lengthGap)
     else:
         if (osu_count > 1):
             print("Multiple .osu file detected")
@@ -121,6 +125,11 @@ def main():
             input(f"Multiply BPM (Ex. 0.5 ,0.75) Default ({config_multiplybpm}) : ") or config_multiplybpm)
         input_offset = int(input(
             f"Enter the Offset (Music Come Faster by X millisecs) Default ({config_offset}) : ") or config_offset)
+        ln_mode = int(input(f"Enter the LN Mode (0/1/2) (Normal/Short/Full) Default ({config_lnMode}) : ") or config_lnMode)
+        if(ln_mode != 0):
+            length_gap = int(input(f"Enter the LN Length/Gap (4/8/16) Default ({config_lengthGap}) : ") or config_lengthGap)
+        else:
+            length_gap = 0
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for index, osu in enumerate(osu_files):
@@ -141,8 +150,7 @@ def main():
                     shutil.copy(source_path, inprogress_osu_folder)
 
             result = executor.submit(convert_to_o2jam, index, input_id, input_level,
-                                     input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID)
-
+                                     input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID, ln_mode, length_gap)
     if config_auto_remove_inprogress:
         print("Deleting Folder : ", inprogress_folder)
         shutil.rmtree(inprogress_folder)

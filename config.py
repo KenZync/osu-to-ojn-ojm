@@ -13,7 +13,9 @@ def generate_default_config(config_file):
 	"level" : "1",
 	"multiplyBPM" : "1",
 	"offset" : "0",
-	"useTitle" : "True"
+	"useTitle" : "True",
+	"lnMode" : "0",
+	"lengthGap" : "4"
 	}
 
 	config_file.add_section("Automation")
