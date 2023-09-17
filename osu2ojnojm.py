@@ -11,7 +11,7 @@ from utils import calc_measures
 
 from rosu_pp_py import Beatmap, Calculator
 
-def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID):
+def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title, osu, parent, inprogress_osu_folder, output_folder, input_offset, config_auto_ID, ln_mode, length_gap):
     map = Beatmap(path = osu)
     calc = Calculator(mode = 3)
     max_perf = calc.performance(map)
@@ -101,7 +101,9 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
     for obj in object_lines:
         objects = obj.split(',')
         note_offset = int(objects[2])
+        object_type = objects[3]
         last_column = objects[5].split(':')
+        rest = last_column[1:]
         ln_offset = int(last_column[0])
         if first_note is None or note_offset < first_note:
             first_note = note_offset
@@ -109,14 +111,56 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
             last_note = note_offset
         if ln_offset > last_note:
             last_note = ln_offset
+        if(ln_mode == 1 or ln_mode == 2):
+            # Initialize a variable to store the corresponding BPM
+            corresponding_bpm = None
 
-        hit_object = {"x": objects[0],
-                      "y": objects[1],
-                      "offset": note_offset,
-                      "objectType": objects[3],
-                      "soundType": objects[4],
-                      "offsetLongNote": ln_offset,
-                      "rest": last_column[1:]}
+            # Iterate through the sorted bpm_list to find the relevant BPM
+            for bpm_point in bpm_list:
+                if note_offset >= bpm_point["offset"]:
+                    corresponding_bpm = bpm_point["bpm"]
+                else:
+                    break
+            
+
+            if objects[3] == "1" or objects[3] == "5":
+                rest = last_column 
+                # Calculate the length of the long note based on BPM
+                object_type = "128"
+
+                for next_obj in object_lines:
+                    next_objects = next_obj.split(',')
+                    next_note_offset = int(next_objects[2])
+                    if(objects[0] == next_objects[0] and next_note_offset > note_offset):
+                        break
+
+                ln_length = round((60000 / corresponding_bpm) / length_gap)
+                if(ln_mode == 1):
+                    ln_offset = note_offset + ln_length
+                    if (ln_offset >= next_note_offset or abs(ln_offset - next_note_offset) == 1):
+                        while ln_offset >= next_note_offset or abs(ln_offset - next_note_offset) == 1:
+                            ln_length /= 2
+                            ln_offset = note_offset + ln_length
+                            break
+                if(ln_mode == 2):
+                    ln_offset = next_note_offset
+                    ln_offset = ln_offset - ln_length
+                    if(ln_offset <= note_offset or abs(ln_offset - note_offset) == 1):
+                        while ln_offset <= note_offset or abs(ln_offset - note_offset) == 1:
+                            ln_length /= 2
+                            ln_offset = note_offset + ln_length
+                            break
+                ln_offset = round(ln_offset)
+        
+        hit_object = {
+            "x": objects[0],
+            "y": objects[1],
+            "offset": note_offset,
+            "objectType": object_type,
+            "soundType": objects[4],
+            "offsetLongNote": ln_offset,
+            "rest": rest
+        }
         beatmap["hitObjects"].append(hit_object)
 
     print("first note:", first_note)
@@ -256,6 +300,6 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
                 os.path.join(output_folder, "o2ma"+input_id+".ojm"))
 
     print("Apply Metadata, Cover and BMP")
-    apply_metadata(inprogress_osu_folder, output_folder, input_id, input_level, use_title, metadata_lines, found_image)
+    apply_metadata(inprogress_osu_folder, output_folder, input_id, input_level, use_title, metadata_lines, found_image, ln_mode, length_gap)
 
     print(f"Done ID {input_id}:", osu)
