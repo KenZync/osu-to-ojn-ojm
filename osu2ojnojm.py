@@ -127,7 +127,7 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
                 for next_obj in object_lines[index:]:
                     next_objects = next_obj.split(',')
                     next_note_offset = int(next_objects[2])
-                    if(objects[0] == next_objects[0] and next_note_offset > note_offset):
+                    if(is_same_column(int(objects[0]),int(next_objects[0])) and next_note_offset > note_offset):
                         break
 
                 ln_length = round((60000 / corresponding_bpm) / length_gap)
@@ -144,7 +144,7 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
                     if(ln_offset <= note_offset or abs(ln_offset - note_offset) == 1):
                         while ln_offset <= note_offset or abs(ln_offset - note_offset) == 1:
                             ln_length /= 2
-                            ln_offset = note_offset + ln_length
+                            ln_offset = next_note_offset - ln_length
                             break
                 ln_offset = round(ln_offset)
         
@@ -296,3 +296,9 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
     apply_metadata(inprogress_osu_folder, output_folder, input_id, input_level, use_title, metadata_lines, found_image, ln_mode, length_gap)
 
     print(f"Done ID {input_id}:", osu)
+
+def is_same_column(num1, num2):
+    zone_size = 512 / 7
+    zone1 = int(num1 / zone_size)
+    zone2 = int(num2 / zone_size)
+    return zone1 == zone2
