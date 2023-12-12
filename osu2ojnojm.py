@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+from bms_writer import increaseMeasureByOne
 
 from ojn_writer import apply_metadata
 from osu_writer import write_osu
@@ -283,6 +284,9 @@ def convert_to_o2jam(index, input_id, input_level, input_multiply_bpm, use_title
     print("Converting to BMS")
     subprocess.run('osu2bms '+hx_osu_path+' '+hx_bms_path+' --key-map-o2mania',
                    shell=True, cwd="lib", stdout=subprocess.DEVNULL)
+    
+    print("Increasing Measure By One")
+    increaseMeasureByOne(hx_bms_path)
 
     print("Converting to OJN")
     subprocess.run('enojn2 '+input_id+' '+hx_bms_path,
